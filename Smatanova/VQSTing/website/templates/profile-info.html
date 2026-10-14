@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Profile info{% endblock %}
+
+{% block content %}
+
+<div class="container mb-5">
+  <h1 class="text-center mt-5">
+    Profile
+  </h1>
+    <div class="mt-5" style="font-size: 1.1rem;">
+      <div class="offset-md-2">
+        <p style="font-size: 1.3rem; font-weight: 400;">
+          Username: <span style="font-size: 1.6rem; font-weight: 600;">{{user.username}}</span>
+        </p>
+        {% for detail in user.details %}
+        <p>
+          Gender: 
+          <span style="font-size: 1.3rem; font-weight: 500;">
+            {% if detail.gender=='m' %}
+              Man
+            {% else %}
+              Woman
+            {% endif %}
+          </span>
+        </p>
+        <p>
+          Age: <span style="font-size: 1.3rem; font-weight: 500;">{{detail.age}}</span>      
+        </p>
+        <p>
+          Eye correction:
+          <span style="font-size: 1.3rem; font-weight: 500;">
+            {% if detail.glasses %}
+              Yes
+            {% else %}
+              No
+            {% endif %}
+          </span>
+        </p>
+        {% endfor %}
+
+        <a href="/profile-update">
+          <button type="button" class="btn btn-primary mt-2">Edit profile</button>
+        </a>
+
+      </div>
+      
+    </div>
+          
+</div>
+  
+
+{% endblock %}

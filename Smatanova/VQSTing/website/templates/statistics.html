@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Statistics{% endblock %}
+
+{% block content %}
+      
+<div class="container mb-5">
+    
+    <h1 class="text-center mt-5">
+        {{session.name}}
+    </h1>    
+    
+    <p class="mt-3 mb-4" style="font-size: 1.2rem; width: max-content; margin: auto;">
+        {% if session.display %}
+        <span class="me-4">
+            Display parameters: {{session.display}}
+        </span>
+        {% endif %}
+        {% if session.test_method %}
+        <span>
+            Method: {{(session.test_method).upper()}}
+        </span>
+        {% endif %}
+    </p>
+
+    {% if get_all_participants(session.id)==0 %}
+    <div style="font-size: 1.5rem; font-weight: 500; font-style: italic;">
+        No one has completed your session yet.
+    </div>
+    {% else %}
+    <div>
+        <div class="statistics">
+            All participants: {{get_all_participants(session.id)}}
+        </div>
+        <div class="statistics">
+            Age: {{get_age_range(session.id)[0]}} - {{get_age_range(session.id)[1]}}
+        </div>
+        <div class="statistics">
+            Average age: {{get_age_range(session.id)[2]}}
+        </div>
+    </div>
+
+    <div style="clear: both;">
+        <div style="width: 22rem; float: left;" id="gender">{{ gender | safe }}</div>
+        <div style="width: 35rem; float: left;" id="ages">{{ ages | safe }}</div>
+        <div style="width: 22rem; float: left;" id="sight">{{ sight | safe }}</div>
+    </div>  
+    {% endif %}
+            
+</div>
+
+
+{% endblock %}
+

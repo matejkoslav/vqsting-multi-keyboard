@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Done{% endblock %}
+
+{% block content %}
+      
+<div class="container mt-5 mb-5">
+    <h1>
+        DONE!
+    </h1>
+    <h3>
+        Thank you for your particiapation!
+    </h3>
+    <p>
+        You will be redirected to the session list in a few seconds.
+    </p>
+</div>
+
+<script>
+    setTimeout(function() {
+        window.location.href = "/sessions-list";
+    }, 5000);
+</script>
+
+{% endblock %}
+

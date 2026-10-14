@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Create test{% endblock %}
+
+{% block content %}
+
+<div class="container mb-5">
+    <h1 class="text-center mt-5">
+        Create test session
+    </h1>
+    <form method="POST">
+        <div class="row">
+            <div class="offset-md-3 col-md-6 mt-3">
+                <div class="form-group mt-1">
+                    <label for="name">Test name</label>
+                    <input type="text" class="form-control" id="name" name="name">
+                </div>
+                <div>
+                    <label for="test_method">Method</label>
+                    <select class="form-select" name="test_method" id="test_method">
+                        <option value="acr">ACR</option>
+                        <option value="acr-hr">ACR-HR</option>
+                        <option value="dcr">DCR</option>
+                    </select>
+                </div>
+                <div class="form-group mt-1">
+                    <label for="display">Used display</label>
+                    <input type="text" class="form-control" id="display" name="display">
+                </div>
+                <div class="form-group mt-1">
+                    <label for="surroundings">Surroundings</label>
+                    <input type="text" class="form-control" id="surroundings" name="surroundings">
+                </div>
+                <div class="form-group mt-1">
+                    <label for="password">Create password for the test</label>
+                    <input type="text" class="form-control" id="password" name="password">
+                </div>
+                <div class="d-flex justify-content-center">
+                    <button type="submit" class="btn btn-primary mt-3">Create session</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+
+
+</div>
+
+
+{% endblock %}

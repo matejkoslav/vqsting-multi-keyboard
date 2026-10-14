@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Done{% endblock %}
+
+{% block content %}
+      
+<div class="container mt-5 mb-5">
+    <h1>
+        Oops!
+    </h1>
+    <h3>
+        You selected inappropriate value!
+    </h3>
+    <p>
+        You will be redirected in a few seconds.
+    </p>
+</div>
+
+<script>
+    setTimeout(function() {
+        var id_session = "{{ id_session }}";
+        window.location.href = "{{url_for('video.training', id_session=id_session)}}";
+    }, 5000);
+</script>
+
+{% endblock %}
+

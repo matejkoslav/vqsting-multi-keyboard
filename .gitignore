@@ -1,0 +1,20 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# --- Veľké veci, ktoré sa necommitujú (VQSTing) ---
+# testovacie videá (~581 MB) a prehrávač mpv.exe (~104 MB)
+Smatanova/VQSTing/video/
+Smatanova/VQSTing/mpv.exe
+
+# zdrojové PDF (diplomovka + manuál)
+*.pdf
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+*.log

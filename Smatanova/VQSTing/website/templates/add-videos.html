@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Add videos{% endblock %}
+
+{% block content %}
+      
+<div class="container mt-5 mb-5">
+    <div>
+        <h1>
+            Please upload video sequences
+        </h1>
+        <div class="mt-4">
+            Upload video sequences into a folder with the same name as the created test session.            
+        </div>
+        <p>
+            Make sure to insert sequences into the correct folders for training, reference, and tested sequences
+        </p>
+        <p>
+            When you are done, pres the 'DONE' button.
+        </p>
+        
+        <form method="POST">
+            <div class="mt-5">
+                <div>
+                    <div class="form-group mt-1">
+                        <label for="letters">Number of letters for sequence division</label>
+                        <input type="number" class="form-control" style="width: 5rem;" step="1" value="5" id="letters" name="letters">
+                      </div>
+                </div>  
+                    <button type="submit" id="button" style="display: none; font-weight: 500;" class="btn btn-primary mt-4 me-5 px-4 py-3">DONE</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+        var button = document.getElementById("button");
+        button.style.display = "block";
+    }, 7000); 
+    });
+</script>
+{% endblock %}
+

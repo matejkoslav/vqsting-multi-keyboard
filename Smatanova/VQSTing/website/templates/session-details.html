@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Details{% endblock %}
+
+{% block content %}
+      
+<div class="container mb-5">
+    <h1 class="text-center mt-5">
+        {{session.name}}
+    </h1>
+    <h2 class="text-center mt-3">
+        Session details
+    </h2>
+
+    <div>
+        {% for training in session.trainings|sort(attribute='ref', reverse=True) %}
+        <div class="sequence_list">
+            <div style="font-weight: 500; padding-bottom: 1rem;">
+                Training {{loop.index}}
+            </div>
+            <div style="font-weight: 500;">
+                {{training.name}}
+            </div>
+            <div>
+                Min: {{training.min}}
+            </div>
+            <div>
+                Max: {{training.max}}
+            </div>
+            {% if training.ref %}
+            <div style="font-weight: 500;">
+                Reference
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    <div style="clear: both; padding-left: 1rem;" class="session_buttons">
+        <a href="{{url_for('views.set_training', id=session.id)}}">
+            <button type="button" class="btn btn-primary">Edit training values</button>
+        </a>
+    </div>
+
+    <div style="clear: both; padding-top: 2rem;">
+        {% for sequence in session.sequences %}
+        <div class="sequence_list">
+            <div style="font-weight: 500; padding-bottom: 1rem;">
+                Sequence {{loop.index}}
+            </div>
+            {% for video in sequence.videos %}
+            <div {% if video.reference %} style="font-weight: 500;" {% endif %}>
+                {{video.name}}
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+
+    
+</div>
+
+{% endblock %}
+

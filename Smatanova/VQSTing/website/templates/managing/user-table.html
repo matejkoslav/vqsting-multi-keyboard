@@ -1,0 +1,40 @@
+{% extends "managing/base-admin.html" %}
+{% block title %}User table{% endblock %}
+
+{% block content %}
+
+<div class="container">
+  <h1 class="text-center mt-4">
+    <a href="{{url_for('admin.show_table_users')}}" class="nothing">User table</a>
+  </h1>
+    
+  <table class="table">
+    <tr>
+        <th>ID</th>
+        <th>Username</th>
+        <th>Role</th>
+        <th>Delete</th>
+    </tr>
+
+    {% for our_user in our_users %}
+    <tr>
+        <td>{{our_user.id}}</td>
+        <td>{{our_user.username}}</td>
+        <td>
+            {% if our_user.role==10 %}
+            Specialist
+            {% else %}
+            Participant
+            {% endif %}
+        </td>
+        <td><a href="{{url_for('admin.delete_user', id=our_user.id)}}">Delete</a></td>
+    </tr>
+
+    {% endfor %}
+
+  </table>
+          
+</div>
+  
+
+{% endblock %}

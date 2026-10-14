@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Sessions{% endblock %}
+
+{% block content %}
+      
+<div class="container mb-5">
+    <h1 class="text-center mt-5">
+        <div class="nothing">Test sessions</div>
+    </h1>
+      
+    {% for session in user.sessions %}
+
+    
+
+    <h2 class="mt-4" {% if session.ok == False %} style="color: red;" {%endif%}>
+        {{session.name}}
+        <span style="font-size: 1.2rem;">( {{get_all_participants(session.id)}} ) </span>
+    </h2>
+    <div class="info_session">
+        <span>Method: {{(session.test_method).upper()}}</span>
+        {% if session.display%}
+        <span>Display: {{session.display}}</span>
+        {% endif %}
+        {% if session.surroundings%}
+        <span>Surroundings: {{session.surroundings}}</span>
+        {% endif %}
+        <span>Password: {{session.password}}</span>    
+    </div>
+    {% if session.ok == False %}
+    <div class="session_buttons">
+        <a href="{{url_for('views.add_videos', session = session.id)}}">
+            <button type="button" class="btn btn-primary">Add videos</button>
+        </a>
+        <a href="{{url_for('admin.delete_session', id=session.id)}}">
+            <button type="button" class="btn btn-danger">Delete</button>
+        </a>
+    </div>
+    {% else %}
+    <div class="session_buttons">
+        <a href="{{url_for('views.details', id=session.id)}}">
+            <button type="button" class="btn btn-primary">Details</button>
+        </a>
+        <a href="{{url_for('views.statistics', id=session.id)}}">
+            <button type="button" class="btn btn-primary">Statistics</button>
+        </a>
+        <a href="{{url_for('video.export', id=session.id)}}">
+            <button type="button" class="btn btn-primary">Export</button>
+        </a>
+        <a href="{{url_for('admin.delete_session', id=session.id)}}">
+            <button type="button" class="btn btn-danger">Delete</button>
+        </a>
+    </div>
+    {% endif %}
+
+    {% endfor %}  
+            
+</div>
+    
+
+{% endblock %}
+

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Sessions{% endblock %}
+
+{% block content %}
+      
+<div class="container mb-5">
+    <h1 class="text-center mt-5">
+       Sessions list
+    </h1>
+ 
+    {% if not user.details %}
+    <div style="font-size: 1.5rem; font-weight: 500; font-style: italic;">
+        You have to fill up your profile first!
+    </div>
+    {% else %}
+      
+    <div>
+        {% for session in all_sessions %}
+        <div class="mb-4">
+            <div>
+                <span class="m-2 ms-0" style="font-size: 1.9rem; font-weight: 500;">{{ session.name }}</span>
+                <span class="m-2" style="font-size: 1.2rem; font-weight: 500;">
+                    Author: {{get_user_name(session.id_user)}}
+                </span>
+                {% if session.id in get_user_completed(user.id) %}
+                <span class="m-2" style="font-size: 1.5rem; font-weight: 800;">
+                    &check;
+                </span>
+                <span class="m-2" style="font-size: 1.1rem; font-weight: 400;">
+                    {{get_completed_date(session.id,user.id)}}
+                </span>
+                {% endif %}
+            </div> 
+            {% if not session.id in get_user_completed(user.id) %}
+            <div>
+                <form method="POST" style="display: ruby;">
+                    <div class="form-group mt-1" style="width: 18rem; display: flex;">
+                        <label for="password" class="me-3" style="font-size: 1.1rem;">Password:</label>
+                        <input type="text" class="form-control form-control-sm me-3" id="password" name="password">
+                    </div>
+                    <input type="hidden" id="session_id" name="session_id" value="{{ session.id }}">
+                    <button type="submit" class="btn btn-primary me-3">Begin test</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% endif %}
+              
+</div>
+    
+
+{% endblock %}
+
