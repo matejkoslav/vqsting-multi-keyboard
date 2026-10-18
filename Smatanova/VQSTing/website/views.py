@@ -2,8 +2,8 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from . import db, role_required
 from .models import User, Detail, Session, Sequence, Video, Valuation, Completed, Training
+from .platform_compat import open_folder
 import os
-import subprocess
 import random
 import time
 from sqlalchemy import func
@@ -81,7 +81,7 @@ def add_videos(session):
     try:
         this_session = Session.query.filter_by(id=session).first()
         folder_path = os.path.join("video", this_session.name)
-        subprocess.call(["start", folder_path], shell=True)
+        open_folder(folder_path)
 
         if request.method=='POST':
             letters = request.form.get('letters')
@@ -115,9 +115,9 @@ def insert_sequences(id, letters):
 
                 for file in f:
 
-                    folder = r.split("\\")
+                    folder = os.path.basename(r)
 
-                    if  folder[2]=="training":
+                    if  folder=="training":
                         training = Training(id_session=this_session.id, name=str(file), max=5, min=1, ref=False)
                         db.session.add(training)
                         db.session.commit()
@@ -141,7 +141,7 @@ def insert_sequences(id, letters):
                             db.session.add(sequence)
                             db.session.commit()
                             sequence = Sequence.query.filter_by(id_session=this_session.id).order_by(Sequence.id.desc()).first()
-                        if (folder[2]=="ref_seq"):
+                        if (folder=="ref_seq"):
                             reference=True
                         else:
                             reference=False

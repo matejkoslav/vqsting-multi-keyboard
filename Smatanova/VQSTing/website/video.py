@@ -2,10 +2,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, make_r
 from flask_login import login_required, current_user
 from . import db, role_required
 from .models import User, Detail, Session, Sequence, Video, Valuation, Completed, Training, Order
+from .platform_compat import open_folder, play_videos, video_path
 import os
 import csv
 from io import StringIO
-import subprocess
 from random import randint
 from sqlalchemy import and_
 import random
@@ -38,37 +38,35 @@ def training_play(id_session):
     training_videos = Training.query.filter_by(id_session=id_session).filter_by(ref=False).all()   
 
     folder_name = session.name.replace(" ","_")
-    def_path = "video\\" + folder_name + "\\training"
+    def_path = video_path(folder_name, "training")
 
     print(def_path)
 
     if not os.path.exists(def_path):
         return redirect(url_for('views.problem'))
 
-    grey = "video\\grey50.mp4"
+    grey = video_path("grey50.mp4")
     if not os.path.exists(grey):
         return redirect(url_for('views.problem'))
 
+    current_video = os.path.join(def_path, training_videos[training_video_id].name)
+
     if session.test_method == "dcr":
         ref_video = Training.query.filter_by(id_session=id_session, ref=True).first()
-        folder_name = session.name.replace(" ","_")
-        ref_video_path = "video\\" + folder_name + "\\training\\" + ref_video.name
+        ref_video_path = video_path(folder_name, "training", ref_video.name)
         if not os.path.exists(ref_video_path):
             return redirect(url_for('views.problem'))
-        
-        video_path =ref_video_path + " " + grey + " " + def_path + "\\" + training_videos[training_video_id].name
-        if not os.path.exists(def_path + "\\" + training_videos[training_video_id].name):
+
+        if not os.path.exists(current_video):
             return redirect(url_for('views.problem'))
-        
+
         scale = ["32rem", "IMPERCEPTIBLE", "PERCEPTIBLE BUT NOT ANNOYING", "SLIGHTLY ANNOYING", "ANNOYING", "VERY ANNOYING"]
+        play_videos(ref_video_path, grey, current_video)
     else:
-        video_path = def_path + "\\" + training_videos[training_video_id].name
-        if not os.path.exists(video_path):
+        if not os.path.exists(current_video):
             return redirect(url_for('views.problem'))
         scale = ["15rem", "EXCELLENT", "GOOD", "FAIR", "POOR", "BAD"]
-
-    subprocess.call(("mpv.exe  --cursor-autohide=0 --osc=no --no-input-default-bindings --ontop --fs {filename}")
-                    .format(filename=video_path))
+        play_videos(current_video)
     
     return redirect(url_for('video.valuation_training',id_session=id_session, min=training_videos[training_video_id].min, max=training_videos[training_video_id].max))
  
@@ -190,35 +188,34 @@ def video_play(id_session):
     folder_name = session.name.replace(" ","_")
 
     if video.reference:
-        def_path = "video\\" + folder_name + "\\ref_seq"
+        def_path = video_path(folder_name, "ref_seq")
     else:
-        def_path = "video\\" + folder_name + "\\test_seq"
+        def_path = video_path(folder_name, "test_seq")
     if not os.path.exists(def_path):
         return redirect(url_for('views.problem'))
-    grey = "video\\grey50.mp4"
+    grey = video_path("grey50.mp4")
     if not os.path.exists(grey):
         return redirect(url_for('views.problem'))
+
+    current_video = os.path.join(def_path, video.name)
 
     if session.test_method == "dcr":
         sequence_id = video.id_sequence
         ref_video = db.session.query(Video.name).filter(and_(Video.id_sequence == sequence_id, Video.reference == True)).first()
-        ref_video_path = "video\\" + folder_name + "\\ref_seq\\" + ref_video[0]
+        ref_video_path = video_path(folder_name, "ref_seq", ref_video[0])
         if not os.path.exists(ref_video_path):
             return redirect(url_for('views.problem'))
-        video_path =ref_video_path + " " + grey + " " + def_path + "\\" + video.name  
-        if not os.path.exists(def_path + "\\" + video.name):
-            return redirect(url_for('views.problem'))     
+        if not os.path.exists(current_video):
+            return redirect(url_for('views.problem'))
         scale = ["32rem", "IMPERCEPTIBLE", "PERCEPTIBLE BUT NOT ANNOYING", "SLIGHTLY ANNOYING", "ANNOYING", "VERY ANNOYING"]
+        play_videos(ref_video_path, grey, current_video)
     else:
-        video_path = def_path + "\\" + video.name
-        if not os.path.exists(video_path):
+        if not os.path.exists(current_video):
             return redirect(url_for('views.problem'))
         scale = ["15rem", "EXCELLENT", "GOOD", "FAIR", "POOR", "BAD"]
+        play_videos(current_video)
 
-    print(video_path)
-
-    subprocess.call(("mpv.exe  --cursor-autohide=0 --osc=no --no-input-default-bindings --ontop --fs {filename}")
-                    .format(filename=video_path))
+    print(current_video)
     
     return redirect(url_for('video.valuation',id_session=id_session,id_video=video.id))
     
@@ -263,7 +260,7 @@ def export(id):
     sequences = Sequence.query.filter_by(id_session=id).all()
     folder_path = os.path.join("csv")
     os.makedirs(folder_path, exist_ok=True)
-    subprocess.call(["start", folder_path], shell=True)
+    open_folder(folder_path)
     session_name = session.name.replace(" ","_")
     csv_file_path = os.path.join(os.getcwd(), "csv", session_name + ".csv")
     
