@@ -1,6 +1,6 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, Response
+from flask import Blueprint, render_template, request, flash, redirect, url_for, Response, jsonify
 from flask_login import login_required, current_user
-from . import db, role_required
+from . import db, role_required, keyboards
 from .models import User, Detail, Session, Sequence, Video, Valuation, Completed, Training
 from .platform_compat import open_folder
 import os
@@ -336,3 +336,15 @@ def statistics(id):
         sight=sight_fig.to_html(full_html=False, config={'displayModeBar': False, 'displaylogo': False}),
         ages=age_fig.to_html(full_html=False, config={'displayModeBar': False, 'displaylogo': False})
         )
+
+@views.route('/keyboards')
+@login_required
+@role_required(10)
+def keyboards_page():
+    return render_template("keyboards.html", user=current_user)
+
+@views.route('/keyboards/state')
+@login_required
+@role_required(10)
+def keyboards_state():
+    return jsonify(keyboards.state())

@@ -6,7 +6,7 @@ o novú funkciu: **viac testerov na jednom PC, každý s vlastnou klávesnicou**
 - Pôvodná appka: Lenka Smatanová, ŽU FEIT (2024)
 - Náš cieľ: 1 PC + N klávesníc → každý tester hodnotí na svojej
 
-> Appka je **Windows-only**.
+> Appka beží na **Windows aj Linux** (od 18.10.2026). Keyboard tracking je zatiaľ **Linux-only**.
 
 ## 👉 Začni tu
 

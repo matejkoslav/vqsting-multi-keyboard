@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Keyboards{% endblock %}
+
+{% block content %}
+
+<div class="container mb-5">
+    <h1 class="text-center mt-5">Keyboards</h1>
+    <p class="text-center text-muted">Press any key on a keyboard — only the row for that physical keyboard changes.</p>
+
+    <div id="unsupported" class="alert alert-warning d-none">
+        Device-level keyboard detection is Linux-only right now.
+    </div>
+    <div id="listener" class="alert alert-danger d-none">
+        Keyboard listener is not running. Start the app with <code>./run.sh</code>.
+    </div>
+
+    <table class="table table-sm align-middle mt-4">
+        <thead>
+            <tr>
+                <th>Keyboard</th>
+                <th>Node</th>
+                <th>ID</th>
+                <th>Last key</th>
+            </tr>
+        </thead>
+        <tbody id="rows">
+            <tr><td colspan="4">Loading…</td></tr>
+        </tbody>
+    </table>
+
+    <p class="small text-muted">Updated <span id="ts">–</span></p>
+</div>
+
+<script>
+    function cell(text, className) {
+        const td = document.createElement('td');
+        td.textContent = text || '–';
+        if (className) td.className = className;
+        return td;
+    }
+
+    async function refresh() {
+        const res = await fetch('/keyboards/state');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        document.getElementById('unsupported').classList.toggle('d-none', data.supported);
+        document.getElementById('listener').classList.toggle('d-none', data.listener);
+
+        const rows = document.getElementById('rows');
+        rows.replaceChildren();
+
+        if (!data.devices.length) {
+            const tr = document.createElement('tr');
+            tr.append(cell('No keyboard found', 'text-muted'));
+            rows.append(tr);
+        }
+
+        for (const d of data.devices) {
+            const tr = document.createElement('tr');
+            tr.append(cell(d.name));
+            tr.append(cell(d.node, 'font-monospace'));
+            tr.append(cell(d.uniq || d.phys, 'font-monospace small'));
+
+            if (d.key) {
+                tr.append(cell(d.key + '  (' + Math.max(0, Date.now() / 1000 - d.at).toFixed(1) + ' s ago)', 'fw-bold text-success'));
+            } else {
+                tr.append(cell('—'));
+            }
+            rows.append(tr);
+        }
+
+        document.getElementById('ts').textContent = new Date().toLocaleTimeString();
+    }
+
+    refresh();
+    setInterval(refresh, 1000);
+</script>
+
+{% endblock %}

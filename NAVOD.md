@@ -14,7 +14,7 @@ Krátky návod pre kolegov. Cieľ: **stiahnuť → spustiť → funguje to.**
 
 ## 1. Čo potrebuješ (raz nainštalovať)
 
-- **Windows** (appka je Windows-only).
+- **Windows + Linux** (od 18.10.2026).
 - **Python 3** — <https://www.python.org/downloads/> → pri inštalácii zaškrtni **„Add python.exe to PATH“**.
 - **Git** — [Git for Windows](https://git-scm.com/download/win) (nainštaluj vrátane *Git Bash*).
 - **`mpv.exe` a videá nie sú v repe** (sú veľké) → vyžiadaj si ich od Mateja (USB/disk).

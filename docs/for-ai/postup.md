@@ -1,3 +1,8 @@
+> **Update 21.10.2026:** Linux časť (rozlíšenie klávesníc) je hotová —
+> `tools/keyboard_listener.py` + `/keyboards` stránka, architektúra B (samostatný
+> listener + JSON IPC). Ako spustiť → `docs/for-humans/progress.md`. Nižšie je
+> pôvodný plán; Windows Raw Input verzia ešte treba.
+
 odpoved od ai, ešte sa spýtať čo spolupárca
 
 Krátko a k veci — najprv pár faktov, potom odporúčaný postup.
