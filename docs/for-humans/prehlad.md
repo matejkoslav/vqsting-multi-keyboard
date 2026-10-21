@@ -5,7 +5,7 @@ Web appka na **subjektívne hodnotenie kvality videa** (Video Quality Subjective
 Nahrádza papierové hlasovanie: pustíš video → každý klikne známku 1–5 → všetko sa uloží do databázy → export do CSV + grafy.
 
 Pôvodná appka je z diplomovky Lenky Smatanovej (ŽU FEIT, 2024).
-Je **len na Windows** a len na lokálny počítač (nie na internet).
+Beží na **Windows aj Linux**, len lokálne (nie na internet).
 
 ## Čo na tom robíme my
 Pôvodná appka zvládne **1 človeka na 1 PC**.
@@ -29,4 +29,4 @@ Viď `plan.md`.
 
 ## Technicky (detaily v `docs/for-ai/`)
 - Python + Flask, SQLite, SQLAlchemy, MPV prehrávač, Bootstrap.
-- Windows-only: `mpv.exe`, cesty `video\nazov`, otváranie priečinka cez `start`.
+- Pôvodná appka Windows-only: `mpv.exe`, cesty `video\nazov`, otváranie priečinka cez `start` — od 18.10.2026 beží aj na Linuxe (`platform_compat.py`).
