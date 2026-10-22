@@ -131,6 +131,16 @@ def _write():
     os.replace(STATE + ".tmp", STATE)
 
 
+def _drop_privileges(uid):
+    """Become the invoking user and drop root's supplementary groups."""
+    gid = pwd.getpwuid(uid).pw_gid
+    os.chown(RUN_DIR, uid, gid)
+    os.chown(OPEN_SOCK, uid, gid)
+    os.setgroups([])
+    os.setgid(gid)
+    os.setuid(uid)
+
+
 def main():
     os.makedirs(RUN_DIR, mode=0o755, exist_ok=True)
 
@@ -144,11 +154,7 @@ def main():
         server.listen(4)
         os.chmod(OPEN_SOCK, 0o660)   # priečinok je aj tak len pre usera
         if os.fork() == 0:
-            uid = int(os.environ.get("PKEXEC_UID", os.getuid()))
-            gid = pwd.getpwuid(uid).pw_gid
-            os.chown(RUN_DIR, uid, gid)
-            os.setgid(gid)
-            os.setuid(uid)
+            _drop_privileges(int(os.environ.get("PKEXEC_UID", os.getuid())))
         else:
             _opener_loop(server)      # rodič: len otvára nody
             return

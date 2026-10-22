@@ -88,6 +88,38 @@ def keyboards_checks():
         keyboards.STATE, keyboards.PID = original
 
 
+def listener_checks():
+    import pwd
+    from tools import keyboard_listener
+
+    uid = os.getuid()
+    gid = pwd.getpwuid(uid).pw_gid
+    calls = []
+
+    def record(name):
+        def recorder(*args):
+            calls.append((name, args))
+        return recorder
+
+    with patch.object(keyboard_listener.os, "chown", record("chown")), \
+            patch.object(keyboard_listener.os, "setgroups", record("setgroups")), \
+            patch.object(keyboard_listener.os, "setgid", record("setgid")), \
+            patch.object(keyboard_listener.os, "setuid", record("setuid")):
+        keyboard_listener._drop_privileges(uid)
+
+    names = [name for name, _ in calls]
+    check("listener: chowns run dir and socket",
+          ("chown", (keyboard_listener.RUN_DIR, uid, gid)) in calls
+          and ("chown", (keyboard_listener.OPEN_SOCK, uid, gid)) in calls,
+          str(calls))
+    check("listener: drops supplementary groups",
+          ("setgroups", ([],)) in calls, str(calls))
+    check("listener: drops groups before switching user",
+          "setgroups" in names and "setgid" in names and "setuid" in names
+          and names.index("setgroups") < names.index("setgid") < names.index("setuid"),
+          str(names))
+
+
 def make_app():
     db_source = os.path.join(BASE_DIR, "instance", "database.db")
     tmp_db = os.path.join(tempfile.mkdtemp(prefix="vqsting-"), "database.db")
@@ -103,6 +135,8 @@ def main():
           sys.platform)
 
     keyboards_checks()
+    if not IS_WINDOWS:
+        listener_checks()
 
     # --- platform helpers -------------------------------------------------
     expected = "video" + os.sep + "ExampleTest" + os.sep + "test_seq"
