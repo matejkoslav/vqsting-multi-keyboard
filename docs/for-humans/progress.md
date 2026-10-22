@@ -1,6 +1,6 @@
 # Progress — living list
 
-Aktualizované: 22.10.2026 · branch `feature/keyboard-identity` (6 commitov pred `main`, 0 lokálnych — pushnuté)
+Aktualizované: 22.10.2026 · branch `feature/keyboard-identity` — pushnuté, čaká CI
 
 ## ✅ Hotové (18.10.2026)
 - Cross-platform patch (`platform_compat.py`) → appka beží na Linuxe aj Windows
@@ -39,7 +39,7 @@ Appka vie, **z ktorej fyzickej klávesnice** prišlo stlačenie, a zobrazuje to 
 ## ⏭️ Next actionable steps
 1. **Doplniť druhú klávesnicu:** zapnúť KILO BT, `./run.sh`, overiť 2 riadky na `/keyboards`
 2. **Patrik:** prejsť Windows checklist na reálnom Windows (overiť pôvodnú appku)
-3. **Merge:** `feature/keyboard-identity` → `main` (6 commitov, pushnuté; čaká CI + BT test)
+3. **Merge:** `feature/keyboard-identity` → `main` (pushnuté; čaká CI + BT test)
 4. **Windows tracking:** Raw Input (`hDevice` → `RIDI_DEVICENAME`) v
    `tools/keyboard_listener.py` — Flask/stránka ostávajú rovnaké, bez roota
 5. **Users rework:** tester-sloty bez hesla (potrebuje rozhodnutia: login áno/nie,
