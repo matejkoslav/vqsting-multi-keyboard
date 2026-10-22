@@ -24,6 +24,18 @@ def _listener_alive():
 
 
 def state():
+    system = platform.system()
+    if system != "Linux":
+        # Never touch /run or call os.kill on Windows: os.kill(pid, 0)
+        # terminates the process there instead of checking it.
+        return {
+            "platform": system,
+            "supported": False,
+            "listener": False,
+            "devices": [],
+            "age": None,
+        }
+
     try:
         with open(STATE) as f:
             data = json.load(f)
@@ -32,8 +44,8 @@ def state():
 
     alive = _listener_alive()
     return {
-        "platform": platform.system(),
-        "supported": platform.system() == "Linux",
+        "platform": system,
+        "supported": True,
         "listener": alive,
         "devices": data.get("devices", []) if alive else [],
         "age": round(time.time() - data["ts"], 1) if alive and "ts" in data else None,

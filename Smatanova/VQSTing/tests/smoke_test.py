@@ -8,10 +8,12 @@ It never launches mpv or opens a folder.  The demo database is copied to a
 temporary file, so the real instance/database.db is not modified.
 """
 
+import json
 import os
 import shutil
 import sys
 import tempfile
+import time
 from unittest.mock import patch
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,7 +21,7 @@ os.chdir(BASE_DIR)
 sys.path.insert(0, BASE_DIR)
 
 import website
-from website import create_app
+from website import create_app, keyboards
 from website.platform_compat import (
     IS_WINDOWS,
     find_mpv,
@@ -43,6 +45,49 @@ def skip(name, reason):
     print(f"[SKIP] {name} ({reason})")
 
 
+def keyboards_checks():
+    tmp = tempfile.mkdtemp(prefix="vqsting-keyboards-")
+    state_path = os.path.join(tmp, "keyboards.json")
+    pid_path = os.path.join(tmp, "listener.pid")
+    original = (keyboards.STATE, keyboards.PID)
+    keyboards.STATE, keyboards.PID = state_path, pid_path
+    try:
+        state = keyboards.state()
+        check("keyboards: missing files are safe",
+              state["listener"] is False and state["devices"] == [] and state["age"] is None,
+              str(state))
+
+        with open(state_path, "w") as f:
+            f.write("{not json")
+        state = keyboards.state()
+        check("keyboards: corrupt state is safe",
+              state["devices"] == [] and state["age"] is None, str(state))
+
+        if not IS_WINDOWS:
+            with open(state_path, "w") as f:
+                json.dump({"ts": time.time(), "devices": [{"node": "event3"}]}, f)
+            with open(pid_path, "w") as f:
+                f.write(str(os.getpid()))
+            state = keyboards.state()
+            check("keyboards: live listener exposes devices",
+                  state["listener"] is True and state["devices"][0]["node"] == "event3",
+                  str(state))
+
+        with open(state_path, "w") as f:
+            json.dump({"ts": time.time(), "devices": [{"node": "event3"}]}, f)
+        with open(pid_path, "w") as f:
+            f.write("12345")
+        with patch("website.keyboards.platform.system", return_value="Windows"), \
+                patch("website.keyboards.os.kill") as kill:
+            state = keyboards.state()
+        check("keyboards: Windows does not check PIDs", kill.called is False, str(state))
+        check("keyboards: Windows reports no devices",
+              state["supported"] is False and state["listener"] is False
+              and state["devices"] == [], str(state))
+    finally:
+        keyboards.STATE, keyboards.PID = original
+
+
 def make_app():
     db_source = os.path.join(BASE_DIR, "instance", "database.db")
     tmp_db = os.path.join(tempfile.mkdtemp(prefix="vqsting-"), "database.db")
@@ -56,6 +101,8 @@ def make_app():
 def main():
     check("platform detected", IS_WINDOWS or sys.platform.startswith("linux"),
           sys.platform)
+
+    keyboards_checks()
 
     # --- platform helpers -------------------------------------------------
     expected = "video" + os.sep + "ExampleTest" + os.sep + "test_seq"
