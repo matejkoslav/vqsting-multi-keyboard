@@ -1,6 +1,6 @@
 # Progress — living list
 
-Aktualizované: 22.10.2026 · branch `feature/keyboard-identity` (5 commitov pred `main`, 3 lokálne)
+Aktualizované: 22.10.2026 · branch `feature/keyboard-identity` (6 commitov pred `main`, 0 lokálnych — pushnuté)
 
 ## ✅ Hotové (18.10.2026)
 - Cross-platform patch (`platform_compat.py`) → appka beží na Linuxe aj Windows
@@ -31,13 +31,15 @@ Appka vie, **z ktorej fyzickej klávesnice** prišlo stlačenie, a zobrazuje to 
 - [x] smoke test: chýbajúci/poškodený JSON, živý listener, simulovaný Windows,
       poradie `setgroups → setgid → setuid` a vlastníctvo socketu
 - [x] red-green overené: bez fixu testy padnú, s fixom `exit=0`
-- [ ] **manuálny test:** `./run.sh` + 2 klávesnice → `/keyboards` musí ukázať obe
+- [x] `run.sh` posiela pkexecu absolútnu cestu — pkexec mení CWD na `/root`,
+      relatívna cesta `tools/keyboard_listener.py` preto nefungovala
+- [x] listener sa po fixe spustil a otvoril `event3` cez `open.sock` — hardening OK
+- [ ] **manuálny test:** doplniť druhú (KILO BT) klávesnicu a overiť 2 riadky
 
 ## ⏭️ Next actionable steps
-1. **Manuálny test:** `./run.sh` + 2 klávesnice po hardeningu — listener sa musí
-   spustiť a reconnect socket musí fungovať
+1. **Doplniť druhú klávesnicu:** zapnúť KILO BT, `./run.sh`, overiť 2 riadky na `/keyboards`
 2. **Patrik:** prejsť Windows checklist na reálnom Windows (overiť pôvodnú appku)
-3. **Push + merge:** `feature/keyboard-identity` → `main` (5 commitov, 3 lokálne)
+3. **Merge:** `feature/keyboard-identity` → `main` (6 commitov, pushnuté; čaká CI + BT test)
 4. **Windows tracking:** Raw Input (`hDevice` → `RIDI_DEVICENAME`) v
    `tools/keyboard_listener.py` — Flask/stránka ostávajú rovnaké, bez roota
 5. **Users rework:** tester-sloty bez hesla (potrebuje rozhodnutia: login áno/nie,
