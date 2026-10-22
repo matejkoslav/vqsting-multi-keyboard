@@ -1,6 +1,6 @@
 # Progress — living list
 
-Aktualizované: 21.10.2026 · branch `feature/keyboard-identity`
+Aktualizované: 22.10.2026 · branch `feature/keyboard-identity` (5 commitov pred `main`, 3 lokálne)
 
 ## ✅ Hotové (18.10.2026)
 - Cross-platform patch (`platform_compat.py`) → appka beží na Linuxe aj Windows
@@ -23,14 +23,26 @@ Appka vie, **z ktorej fyzickej klávesnice** prišlo stlačenie, a zobrazuje to 
 
 **Funkcionalita appky nezmenená** — len pridané súbory + 2 routes + 1 link v menu.
 
+## ✅ Hotové (22.10.2026): hardening + Windows guard
+- [x] `keyboards.state()` sa na ne-Linuxe vráti hneď — na Windows sa už nečíta
+      `/run` a nevolá `os.kill(pid, 0)` (to by proces zabilo, nie skontrolovalo)
+- [x] `_drop_privileges()` v listeneri: `chown` reconnect socketu na usera +
+      `setgroups([])` pred `setgid/setuid` — dieťa po `pkexec` už nedrží group `root`
+- [x] smoke test: chýbajúci/poškodený JSON, živý listener, simulovaný Windows,
+      poradie `setgroups → setgid → setuid` a vlastníctvo socketu
+- [x] red-green overené: bez fixu testy padnú, s fixom `exit=0`
+- [ ] **manuálny test:** `./run.sh` + 2 klávesnice → `/keyboards` musí ukázať obe
+
 ## ⏭️ Next actionable steps
-1. **Patrik:** prejsť Windows checklist na reálnom Windows (overiť pôvodnú appku)
-2. **Merge:** `feature/cross-platform` → `main` (2 commity čakajú)
-3. **Windows tracking:** Raw Input (`hDevice` → `RIDI_DEVICENAME`) v
+1. **Manuálny test:** `./run.sh` + 2 klávesnice po hardeningu — listener sa musí
+   spustiť a reconnect socket musí fungovať
+2. **Patrik:** prejsť Windows checklist na reálnom Windows (overiť pôvodnú appku)
+3. **Push + merge:** `feature/keyboard-identity` → `main` (5 commitov, 3 lokálne)
+4. **Windows tracking:** Raw Input (`hDevice` → `RIDI_DEVICENAME`) v
    `tools/keyboard_listener.py` — Flask/stránka ostávajú rovnaké, bez roota
-4. **Users rework:** tester-sloty bez hesla (potrebuje rozhodnutia: login áno/nie,
+5. **Users rework:** tester-sloty bez hesla (potrebuje rozhodnutia: login áno/nie,
    kto zakladá testerov) — predpoklad pre napojenie klávesníc na testerov
-5. Napojiť identitu klávesnice na slot testera + hlasovanie 1–5
+6. Napojiť identitu klávesnice na slot testera + hlasovanie 1–5
 
 ## 🚀 Ako spustiť (Linux, tracking)
 
@@ -43,10 +55,12 @@ Ctrl+C       # alebo ./stop.sh — vypne oboje, prístup k /dev/input zaniká
 - stránka `/keyboards` = len admin (`admin`/`admin`), refresh 1 s
 - stav beží v `/run/vqsting/keyboards.json` (RAM, zmizne rebootom)
 
-## 🧠 Rozhodnutia (21.10.2026)
+## 🧠 Rozhodnutia (21.–22.10.2026)
 - Architektúra **B**: samostatný listener proces + IPC cez JSON — rovnaký tvar
   ako Windows verzia (tam len Raw Input namiesto evdev, bez `pkexec`)
 - Prístup k `/dev/input` **len cez dočasné fds** root openera — žiadny ACL/udev rule
+- Po `pkexec` listener **zhodí supplementary groups**; `open.sock` je vlastnený
+  userom, nie rootom (22.10.)
 - Stránka `/keyboards` len pre admina (role 10)
 - Čítač: stdlib `struct`, žiadna nová závislosť (`requirements.txt` ostáva cross-platform)
 
