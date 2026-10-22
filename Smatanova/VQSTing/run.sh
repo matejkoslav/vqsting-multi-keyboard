@@ -3,11 +3,12 @@
 # + Flask appku. Ctrl+C vypne oboje.
 set -e
 cd "$(dirname "$0")"
+SCRIPT_DIR="$PWD"
 
 PY="$HOME/.venvs/vqsting/bin/python"
 [ -x "$PY" ] || PY=python3
 
-pkexec "$PY" tools/keyboard_listener.py &
+pkexec "$PY" "$SCRIPT_DIR/tools/keyboard_listener.py" &
 LISTENER=$!
 trap 'kill "$(cat /run/vqsting/listener.pid 2>/dev/null)" 2>/dev/null || true' EXIT
 
