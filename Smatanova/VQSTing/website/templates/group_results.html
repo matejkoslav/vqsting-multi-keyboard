@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Group results{% endblock %}
+
+{% block content %}
+
+<div class="container mb-5">
+    <h1 class="text-center mt-4">{{ session.name }}</h1>
+    <p class="text-center">
+        <span class="badge bg-secondary">Method: {{ session.test_method|upper }}</span>
+        <span class="badge bg-secondary">{{ run.phase }}</span>
+        {% if session.display %}
+        <span class="badge bg-secondary">Display: {{ session.display }}</span>
+        {% endif %}
+    </p>
+
+    {% if not testers %}
+    <div class="alert alert-warning">
+        This group run has no testers yet.
+        <a href="{{ url_for('group.setup', id_session=session.id) }}">Go to setup</a>.
+    </div>
+    {% else %}
+    <table class="table table-sm align-middle mt-4">
+        <thead>
+            <tr>
+                <th></th>
+                {% for tester in testers %}
+                <th class="text-center">Tester {{ tester.seat }}</th>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td class="text-muted">Age</td>
+                {% for tester in testers %}
+                <td class="text-center">{{ tester.age if tester.age is not none else 'n/a' }}</td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td class="text-muted">Glasses</td>
+                {% for tester in testers %}
+                <td class="text-center">
+                    {%- if tester.glasses is none -%}n/a
+                    {%- elif tester.glasses -%}ano
+                    {%- else -%}nie{%- endif -%}
+                </td>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td>{{ row.video }}</td>
+                {% for value in row.votes %}
+                <td class="text-center">
+                    {%- if value is none -%}<span class="text-muted">n/a</span>{%- else -%}{{ value }}{%- endif -%}
+                </td>
+                {% endfor %}
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="{{ testers|length + 1 }}" class="text-muted">No rounds finished yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+        <a class="btn btn-primary" href="{{ url_for('group.export', id_session=session.id) }}">Export CSV</a>
+        <form method="POST" action="{{ url_for('group.reset', id_session=session.id) }}"
+              onsubmit="return confirm('Reset the group run and delete all votes?');">
+            <button type="submit" class="btn btn-outline-danger">Reset</button>
+        </form>
+        <a class="btn btn-link" href="{{ url_for('views.my_table_sessions') }}">Back to my sessions</a>
+    </div>
+</div>
+
+{% endblock %}

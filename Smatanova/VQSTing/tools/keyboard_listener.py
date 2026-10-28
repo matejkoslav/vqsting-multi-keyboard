@@ -8,7 +8,8 @@ Rozdelenie práv:
 - potomok beží ako prihlásený user (PKEXEC_UID), číta eventy a zapisuje stav.
 
 Prístup k zariadeniam držia len otvorené fds — zanikajú so skončením procesov.
-Výstup: /run/vqsting/keyboards.json (posledná stlačená klávesa per klávesnica).
+Výstup: /run/vqsting/keyboards.json — zariadenia, globálny `seq` a krúžkový
+buffer posledných `events` (kontrakt v docs/for-ai/CONTEXT-group-mode.md).
 """
 
 import json
@@ -21,6 +22,7 @@ import socket
 import struct
 import sys
 import time
+from collections import deque
 
 EV_KEY = 1
 RUN_DIR = "/run/vqsting"
@@ -29,6 +31,7 @@ PID = os.path.join(RUN_DIR, "listener.pid")
 OPEN_SOCK = os.path.join(RUN_DIR, "open.sock")
 EVENT = struct.Struct("llHHi")   # x86_64 Linux: 24 B
 SCAN_EVERY = 5                   # s, kedy skúsiť novo pripojené klávesnice
+EVENTS_KEPT = 64                 # koľko posledných stlačení drží stav pre Flask
 
 KEY_NAMES = {1: "Esc", 14: "Backspace", 15: "Tab", 28: "Enter", 29: "Left Ctrl",
              42: "Left Shift", 54: "Right Shift", 56: "Left Alt", 57: "Space",
@@ -38,7 +41,9 @@ KEY_NAMES.update({30 + i: c for i, c in enumerate("ASDFGHJKL")})
 KEY_NAMES.update({44 + i: c for i, c in enumerate("ZXCVBNM")})
 KEY_NAMES.update({2 + i: str((i + 1) % 10) for i in range(10)})
 
-devices = {}   # node -> {"node", "name", "uniq", "phys", "key", "at"}
+devices = {}   # node -> {"id", "node", "name", "uniq", "phys", "key", "at", "seq"}
+seq = 0        # globálny čítač key-down eventov, nikdy sa neresetuje
+events = deque(maxlen=EVENTS_KEPT)
 
 
 # ---------- root opener: iba otvára nody a posiela fd ----------
@@ -120,14 +125,29 @@ def _add(node, fds):
     if node in devices:
         return
     fds[_open(node)] = node
-    devices[node] = {"node": node, "name": _attr(node, "name"),
-                     "uniq": _attr(node, "uniq"), "phys": _attr(node, "phys"),
-                     "key": None, "at": None}
+    uniq = _attr(node, "uniq")
+    phys = _attr(node, "phys")
+    devices[node] = {"id": "linux:" + (uniq or phys or node), "node": node,
+                     "name": _attr(node, "name"), "uniq": uniq, "phys": phys,
+                     "key": None, "at": None, "seq": None}
+
+
+def record_key(node, key):
+    """Remember one key-down for a device and keep the global counter moving."""
+    global seq
+    seq += 1
+    at = time.time()
+    device = devices[node]
+    device["key"] = key
+    device["at"] = at
+    device["seq"] = seq
+    events.append({"seq": seq, "at": at, "device_id": device["id"], "key": key})
 
 
 def _write():
     with open(STATE + ".tmp", "w") as f:
-        json.dump({"ts": time.time(), "devices": list(devices.values())}, f)
+        json.dump({"ts": time.time(), "platform": "linux", "seq": seq,
+                   "devices": list(devices.values()), "events": list(events)}, f)
     os.replace(STATE + ".tmp", STATE)
 
 
@@ -250,9 +270,7 @@ def _listen():
 
             _, _, typ, code, value = EVENT.unpack(data)
             if typ == EV_KEY and value == 1:
-                node = devices[fds[fd]]
-                node["key"] = KEY_NAMES.get(code, f"code {code}")
-                node["at"] = time.time()
+                record_key(fds[fd], KEY_NAMES.get(code, f"code {code}"))
                 _write()
 
         if time.time() >= next_scan:

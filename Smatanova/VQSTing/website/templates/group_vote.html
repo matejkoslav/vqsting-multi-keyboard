@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="/static/style.css">
+
+    <title>Vote</title>
+
+    <style>
+        html, body { height: 100%; }
+        body { margin: 0; background: #f4f6f8; }
+
+        .vote-wrap { height: 100vh; display: flex; flex-direction: column; padding: 18px 22px 14px; }
+
+        .vote-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+        .vote-head h1 { font-size: 1.6rem; font-weight: 600; margin: 0; }
+        .vote-head .sub { color: #6b7785; font-size: 0.95rem; }
+        .vote-head .clock { display: flex; align-items: baseline; gap: 10px; color: #6b7785; }
+        .vote-head .clock b { font-size: 2.4rem; line-height: 1; color: #1c2530; font-variant-numeric: tabular-nums; }
+        .vote-head .clock.low b { color: #b3261e; }
+
+        /* one column per tester, stretched to the full screen height */
+        .vote-cols { flex: 1; display: grid; gap: 16px; grid-auto-flow: column;
+                     grid-auto-columns: minmax(0, 1fr); min-height: 0; }
+
+        .vote-col { display: flex; flex-direction: column; min-height: 0;
+                    background: #fff; border: 1px solid #d8dde3; border-radius: 14px; overflow: hidden; }
+
+        .who { padding: 12px 14px; border-bottom: 1px solid #eef1f4; text-align: center; }
+        .who h2 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+        .who .kb, .who .demo { font-size: 0.8rem; color: #6b7785; }
+        .who .status { font-weight: 700; font-size: 0.95rem; }
+        .who .status.voted { color: #1f8a4c; }
+        .who .status.waiting { color: #6b7785; }
+
+        .opts { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 10px; min-height: 0; }
+
+        .vote-btn { flex: 1; display: flex; align-items: center; gap: 14px; width: 100%;
+                    padding: 0 16px; background: #fff; text-align: left;
+                    border: 1px solid #d8dde3; border-radius: 10px; color: #1c2530;
+                    font: inherit; font-size: 1rem; cursor: pointer; }
+        .vote-btn .n { font-size: 2rem; font-weight: 700; min-width: 34px; font-variant-numeric: tabular-nums; }
+        .vote-btn.picked { background: #1c2530; border-color: #1c2530; color: #fff; }
+
+        .vote-foot { color: #6b7785; font-size: 0.85rem; margin: 12px 0 0; }
+    </style>
+</head>
+<body>
+<div class="vote-wrap">
+    <div class="vote-head">
+        <h1>Video <span id="current">{{ current }}</span> / <span id="total">{{ total }}</span></h1>
+        <span class="sub">{{ session.name }} · {{ session.test_method|upper }}</span>
+        <span class="clock" id="clock">closes in <b id="countdown">9.0</b> s</span>
+    </div>
+
+    <div id="columns" class="vote-cols"></div>
+
+    <p class="vote-foot">
+        Vote with keys <kbd>1</kbd>–<kbd>5</kbd> on your own keyboard,
+        or click a number in your column.
+    </p>
+</div>
+
+<form id="nextForm" method="POST" action="{{ url_for('group.next_video', id_session=session.id) }}" class="d-none"></form>
+
+<script>
+    const stateUrl = "{{ url_for('group.state', id_session=session.id) }}";
+    const voteUrl = "{{ url_for('group.vote', id_session=session.id) }}";
+    const nextForm = document.getElementById('nextForm');
+
+    let since = 0;
+    let finished = false;
+
+    function ensureColumn(tester, labels) {
+        let column = document.getElementById(`vote-${tester.seat}`);
+        if (column) return column;
+
+        column = document.createElement('div');
+        column.className = 'vote-col';
+        column.id = `vote-${tester.seat}`;
+        column.dataset.seat = tester.seat;
+
+        const options = labels.map((label, index) => {
+            const value = 5 - index;
+            return `<button type="button" class="vote-btn" data-value="${value}">
+                        <span class="n">${value}</span><span>${label}</span>
+                    </button>`;
+        }).join('');
+
+        column.innerHTML = `
+            <div class="who">
+                <h2>Tester ${tester.seat}</h2>
+                <div class="kb" data-role="keyboard"></div>
+                <div class="demo" data-role="demo"></div>
+                <div class="status waiting" data-role="status">… waiting</div>
+            </div>
+            <div class="opts">${options}</div>`;
+
+        column.querySelectorAll('[data-value]').forEach(button => {
+            button.addEventListener('click', () => vote(tester.seat, Number(button.dataset.value)));
+        });
+
+        document.getElementById('columns').append(column);
+        return column;
+    }
+
+    async function vote(seat, value) {
+        await fetch(voteUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({seat: seat, value: value})
+        });
+        refresh();
+    }
+
+    function render(data) {
+        const labels = data.scale.labels;
+        const seats = new Set(data.testers.map(tester => tester.seat));
+        document.querySelectorAll('#columns [data-seat]').forEach(column => {
+            if (!seats.has(Number(column.dataset.seat))) {
+                column.remove();
+            }
+        });
+
+        for (const tester of data.testers) {
+            const column = ensureColumn(tester, labels);
+            column.querySelector('[data-role="keyboard"]').textContent = tester.keyboard_name || 'no keyboard';
+
+            const demographic = [];
+            if (tester.age !== null) demographic.push(`${tester.age} years`);
+            if (tester.glasses !== null) demographic.push(tester.glasses ? 'glasses' : 'no glasses');
+            column.querySelector('[data-role="demo"]').textContent = demographic.join(' · ');
+
+            const status = column.querySelector('[data-role="status"]');
+            status.textContent = tester.vote !== null ? '✓ voted' : '… waiting';
+            status.className = 'status ' + (tester.vote !== null ? 'voted' : 'waiting');
+
+            column.querySelectorAll('[data-value]').forEach(button => {
+                button.classList.toggle('picked',
+                    tester.vote !== null && Number(button.dataset.value) === tester.vote);
+            });
+        }
+    }
+
+    async function refresh() {
+        if (finished) return;
+        const response = await fetch(`${stateUrl}?since=${since}`);
+        if (!response.ok) return;
+        const data = await response.json();
+
+        for (const event of data.events) {
+            if (event.seq > since) since = event.seq;
+        }
+
+        document.getElementById('current').textContent = data.park.current;
+        document.getElementById('total').textContent = data.park.total;
+        document.getElementById('countdown').textContent = Math.ceil(data.park.seconds_left);
+        document.getElementById('clock').classList.toggle('low', data.park.seconds_left < 3);
+
+        if (data.phase === 'finished') {
+            finished = true;
+            clearInterval(timer);
+            window.location = "{{ url_for('group.results', id_session=session.id) }}";
+            return;
+        }
+
+        render(data);
+
+        if (!data.park.round_open) {
+            finished = true;
+            clearInterval(timer);
+            setTimeout(() => nextForm.submit(), 1000);
+        }
+    }
+
+    const timer = setInterval(refresh, 500);
+    refresh();
+</script>
+
+</body>
+</html>
