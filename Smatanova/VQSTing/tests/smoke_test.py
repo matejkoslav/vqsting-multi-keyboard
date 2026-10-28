@@ -72,18 +72,24 @@ def keyboards_checks():
             check("keyboards: live listener exposes devices",
                   state["listener"] is True and state["devices"][0]["node"] == "event3",
                   str(state))
+            check("keyboards: events and seq are passed through",
+                  state["seq"] == 0 and state["events"] == [], str(state))
 
         with open(state_path, "w") as f:
-            json.dump({"ts": time.time(), "devices": [{"node": "event3"}]}, f)
+            json.dump({"ts": time.time(), "seq": 7,
+                       "devices": [{"node": "event3"}],
+                       "events": [{"seq": 7, "key": "3"}]}, f)
         with open(pid_path, "w") as f:
             f.write("12345")
         with patch("website.keyboards.platform.system", return_value="Windows"), \
-                patch("website.keyboards.os.kill") as kill:
+                patch("website.keyboards.os.kill") as kill, \
+                patch("website.keyboards._alive_windows", return_value=True):
             state = keyboards.state()
-        check("keyboards: Windows does not check PIDs", kill.called is False, str(state))
-        check("keyboards: Windows reports no devices",
-              state["supported"] is False and state["listener"] is False
-              and state["devices"] == [], str(state))
+        check("keyboards: Windows never uses os.kill", kill.called is False, str(state))
+        check("keyboards: Windows is supported and exposes devices",
+              state["supported"] is True and state["listener"] is True
+              and state["devices"][0]["node"] == "event3"
+              and state["seq"] == 7 and state["events"][0]["key"] == "3", str(state))
     finally:
         keyboards.STATE, keyboards.PID = original
 
