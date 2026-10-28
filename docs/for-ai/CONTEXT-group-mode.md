@@ -134,7 +134,7 @@ Všetko pod `@login_required @role_required(10)` (admin), blueprint `group`,
 | POST | `/group/<id_session>/tester` | `seat, age, glasses, gender` — upsert testéra |
 | POST | `/group/<id_session>/pair` | `seat` — ďalšia nová klávesa sa priradí tomuto stĺpcu |
 | POST | `/group/<id_session>/add` | pridá ďalší stĺpec (max 4) |
-| POST | `/group/<id_session>/start` | skontroluje párovanie a vek, vygeneruje order, `phase=running`, `current_id=0` |
+| POST | `/group/<id_session>/start` | skontroluje vek testérov, vygeneruje order, `phase=running`, `current_id=0` |
 | GET | `/group/<id_session>/state` | JSON pre frontend (pozri nižšie) |
 | POST | `/group/<id_session>/vote` | `seat, value (1..5)` — hlas myšou |
 | GET | `/group/<id_session>/play` | zahrá video aktuálneho kola cez mpv (blokuje), nastaví `round_started`, vráti hlasovaciu stránku |
@@ -206,7 +206,9 @@ Setup stránka:
   `Backspace` maže, `Enter` potvrdí → `POST /tester`
 - okuliare: po potvrdení veku `1` = áno, `2` = nie
 - admin fallback: v stĺpci sú aj obyčajné `<input>` prvky (vek, okuliare), fungujú myšou
-- *Štart* je aktívny, keď majú všetci testéri `keyboard_id` aj `age`
+- *Štart* je aktívny, keď majú všetci testéri `age`. Párovanie klávesnice je
+  odporúčané, **nie povinné** — bez neho sa hlasuje myšou (jeden testér bez
+  druhej klávesnice musí vedieť odohrať celý test).
 
 ## 7. Export CSV
 
