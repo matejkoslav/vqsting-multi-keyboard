@@ -72,6 +72,19 @@ def device_id(device_name):
     return "win:" + (instance_id(device_name) or device_name)
 
 
+def device_label(device_name):
+    """Krátky názov na zobrazenie: VID_046D&PID_C31C namiesto celej cesty.
+
+    Raw Input nedáva ľudský názov zariadenia (na to treba SetupAPI), takže
+    ukazujeme aspoň vendor/product časť — je to diagnosticky užitočné a
+    nezaplaví to obrazovku testéra.
+    """
+    parts = device_name.split("#")
+    if len(parts) > 1 and parts[1]:
+        return parts[1]
+    return device_name
+
+
 def write_state(path, payload):
     """Celý súbor naraz: Flask nikdy nečíta rozrobený JSON."""
     tmp = path + ".tmp"
@@ -205,7 +218,8 @@ def run():
         name = raw_device_name(raw.header.hDevice)
         instance = instance_id(name) or name
         # node = inštančná cesta; na Linuxe je v tomto poli "eventN"
-        event = state.press(device_id(name), name, instance, key_name(key.VKey))
+        event = state.press(device_id(name), device_label(name), instance,
+                            key_name(key.VKey))
         write_state(path, state.payload())
         print(f"[{event['device_id']}] {event['key']}  ({name})", flush=True)
 
@@ -279,6 +293,9 @@ def selftest():
     assert device_id(names[0]) == "win:7&2f&0&0000"
     assert device_id(names[2]) == "win:no-hash"        # bez inštancie aspoň meno
     assert device_id(names[0]) == device_id(names[0] + "#{other}")   # stabilné
+    assert device_label(names[0]) == "VID_046D&PID_C31C", device_label(names[0])
+    assert device_label(names[1]) == "PNP0303", device_label(names[1])
+    assert device_label("no-hash") == "no-hash"
     print("[OK] instančná cesta a stabilné id")
 
     for vkey, expected in [(0x31, "1"), (0x32, "2"), (0x33, "3"), (0x34, "4"),
