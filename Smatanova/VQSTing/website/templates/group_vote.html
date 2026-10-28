@@ -9,19 +9,61 @@
     <link rel="stylesheet" href="/static/style.css">
 
     <title>Vote</title>
+
+    <style>
+        html, body { height: 100%; }
+        body { margin: 0; background: #f4f6f8; }
+
+        .vote-wrap { height: 100vh; display: flex; flex-direction: column; padding: 18px 22px 14px; }
+
+        .vote-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+        .vote-head h1 { font-size: 1.6rem; font-weight: 600; margin: 0; }
+        .vote-head .sub { color: #6b7785; font-size: 0.95rem; }
+        .vote-head .clock { display: flex; align-items: baseline; gap: 10px; color: #6b7785; }
+        .vote-head .clock b { font-size: 2.4rem; line-height: 1; color: #1c2530; font-variant-numeric: tabular-nums; }
+        .vote-head .clock.low b { color: #b3261e; }
+
+        /* one column per tester, stretched to the full screen height */
+        .vote-cols { flex: 1; display: grid; gap: 16px; grid-auto-flow: column;
+                     grid-auto-columns: minmax(0, 1fr); min-height: 0; }
+
+        .vote-col { display: flex; flex-direction: column; min-height: 0;
+                    background: #fff; border: 1px solid #d8dde3; border-radius: 14px; overflow: hidden; }
+        .vote-col.armed { border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13, 110, 253, .18); }
+
+        .who { padding: 12px 14px; border-bottom: 1px solid #eef1f4; text-align: center; }
+        .who h2 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+        .who .kb, .who .demo { font-size: 0.8rem; color: #6b7785; }
+        .who .status { font-weight: 700; font-size: 0.95rem; }
+        .who .status.voted { color: #1f8a4c; }
+        .who .status.waiting { color: #6b7785; }
+        .who .hint { font-size: 0.8rem; color: #0d6efd; }
+
+        .opts { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 10px; min-height: 0; }
+
+        .vote-btn { flex: 1; display: flex; align-items: center; gap: 14px; width: 100%;
+                    padding: 0 16px; background: #fff; text-align: left;
+                    border: 1px solid #d8dde3; border-radius: 10px; color: #1c2530;
+                    font: inherit; font-size: 1rem; cursor: pointer; }
+        .vote-btn .n { font-size: 2rem; font-weight: 700; min-width: 34px; font-variant-numeric: tabular-nums; }
+        .vote-btn.picked { background: #1c2530; border-color: #1c2530; color: #fff; }
+
+        .vote-foot { color: #6b7785; font-size: 0.85rem; margin: 12px 0 0; }
+    </style>
 </head>
-<body class="bg-light">
-<div class="container-fluid py-3">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="mb-0">Video <span id="current">{{ current }}</span> / <span id="total">{{ total }}</span></h2>
-        <h2 class="mb-0"><span id="countdown">9.0</span> s</h2>
+<body>
+<div class="vote-wrap">
+    <div class="vote-head">
+        <h1>Video <span id="current">{{ current }}</span> / <span id="total">{{ total }}</span></h1>
+        <span class="sub">{{ session.name }} · {{ session.test_method|upper }}</span>
+        <span class="clock" id="clock">closes in <b id="countdown">9.0</b> s</span>
     </div>
 
-    <div id="columns" class="row g-3"></div>
+    <div id="columns" class="vote-cols"></div>
 
-    <p class="text-muted mt-3 mb-0">
+    <p class="vote-foot">
         Vote with keys <kbd>1</kbd>–<kbd>5</kbd> on your own keyboard,
-        or click a column header and then a number.
+        or click your column header and then a number.
     </p>
 </div>
 
@@ -41,26 +83,26 @@
         if (column) return column;
 
         column = document.createElement('div');
-        column.className = 'col-12';
+        column.className = 'vote-col';
         column.id = `vote-${tester.seat}`;
         column.dataset.seat = tester.seat;
 
-        const rows = labels.map((label, index) => {
+        const options = labels.map((label, index) => {
             const value = 5 - index;
-            return `<button type="button" class="btn btn-outline-dark w-100 mb-1" data-value="${value}">${value} · ${label}</button>`;
+            return `<button type="button" class="vote-btn" data-value="${value}">
+                        <span class="n">${value}</span><span>${label}</span>
+                    </button>`;
         }).join('');
 
         column.innerHTML = `
-        <div class="card">
-            <div class="card-header text-center" data-role="head" role="button">
-                <h4 class="mb-1">Tester ${tester.seat}</h4>
-                <div class="small text-muted" data-role="keyboard"></div>
-                <div class="small" data-role="demo"></div>
-                <div class="fw-bold text-muted" data-role="status">… waiting</div>
-                <div class="small text-primary d-none" data-role="hint">click a number to vote</div>
+            <div class="who" data-role="head" role="button">
+                <h2>Tester ${tester.seat}</h2>
+                <div class="kb" data-role="keyboard"></div>
+                <div class="demo" data-role="demo"></div>
+                <div class="status waiting" data-role="status">… waiting</div>
+                <div class="hint d-none" data-role="hint">click a number to vote</div>
             </div>
-            <div class="card-body p-2">${rows}</div>
-        </div>`;
+            <div class="opts">${options}</div>`;
 
         column.querySelector('[data-role="head"]').addEventListener('click', () => {
             armed = tester.seat;
@@ -78,14 +120,12 @@
     }
 
     function updateArm() {
-        document.querySelectorAll('#columns [data-seat] .card').forEach(card => {
-            card.classList.remove('border', 'border-primary', 'border-3');
+        document.querySelectorAll('#columns [data-seat]').forEach(column => {
+            const isArmed = armed === Number(column.dataset.seat);
+            column.classList.toggle('armed', isArmed);
+            const hint = column.querySelector('[data-role="hint"]');
+            if (hint) hint.classList.toggle('d-none', !isArmed);
         });
-        if (armed === null) return;
-        const column = document.getElementById(`vote-${armed}`);
-        if (!column) return;
-        column.querySelector('.card').classList.add('border', 'border-primary', 'border-3');
-        column.querySelector('[data-role="hint"]').classList.remove('d-none');
     }
 
     async function vote(seat, value) {
@@ -107,25 +147,23 @@
             }
         });
 
-        const width = 12 / Math.max(data.testers.length, 1);
         for (const tester of data.testers) {
             const column = ensureColumn(tester, labels);
-            column.className = `col-12 col-lg-${width}`;
             column.querySelector('[data-role="keyboard"]').textContent = tester.keyboard_name || 'no keyboard';
+
             const demographic = [];
             if (tester.age !== null) demographic.push(`${tester.age} years`);
             if (tester.glasses !== null) demographic.push(tester.glasses ? 'glasses' : 'no glasses');
             column.querySelector('[data-role="demo"]').textContent = demographic.join(' · ');
-            column.querySelector('[data-role="hint"]').classList.toggle('d-none', armed !== tester.seat);
 
             const status = column.querySelector('[data-role="status"]');
-            if (tester.vote !== null) {
-                status.textContent = '✓ voted';
-                status.className = 'fw-bold text-success';
-            } else {
-                status.textContent = '… waiting';
-                status.className = 'fw-bold text-muted';
-            }
+            status.textContent = tester.vote !== null ? '✓ voted' : '… waiting';
+            status.className = 'status ' + (tester.vote !== null ? 'voted' : 'waiting');
+
+            column.querySelectorAll('[data-value]').forEach(button => {
+                button.classList.toggle('picked',
+                    tester.vote !== null && Number(button.dataset.value) === tester.vote);
+            });
         }
         updateArm();
     }
@@ -143,6 +181,7 @@
         document.getElementById('current').textContent = data.park.current;
         document.getElementById('total').textContent = data.park.total;
         document.getElementById('countdown').textContent = data.park.seconds_left.toFixed(1);
+        document.getElementById('clock').classList.toggle('low', data.park.seconds_left < 3);
 
         if (data.phase === 'finished') {
             finished = true;
