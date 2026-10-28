@@ -141,7 +141,48 @@ def _drop_privileges(uid):
     os.setuid(uid)
 
 
+def _remove_if_ours(path):
+    """Delete a runtime file only when it belongs to this process."""
+    try:
+        with open(path) as f:
+            if int(f.read()) == os.getpid():
+                os.unlink(path)
+    except (OSError, ValueError):
+        pass
+
+
+def _cleanup():
+    _remove_if_ours(PID)
+
+
+def _on_signal(signum, frame):
+    raise SystemExit(0)
+
+
+def _already_running():
+    """Return the pid of a live listener, or None."""
+    try:
+        with open(PID) as f:
+            pid = int(f.read())
+    except (OSError, ValueError):
+        return None
+    if pid == os.getpid():
+        return None
+    try:
+        os.kill(pid, 0)
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            cmdline = f.read()
+    except OSError:
+        return None
+    return pid if b"keyboard_listener" in cmdline else None
+
+
 def main():
+    running = _already_running()
+    if running:
+        print(f"listener už beží (pid {running})", file=sys.stderr)
+        raise SystemExit(1)
+
     os.makedirs(RUN_DIR, mode=0o755, exist_ok=True)
 
     if os.geteuid() == 0:
@@ -156,9 +197,24 @@ def main():
         if os.fork() == 0:
             _drop_privileges(int(os.environ.get("PKEXEC_UID", os.getuid())))
         else:
-            _opener_loop(server)      # rodič: len otvára nody
+            try:
+                _opener_loop(server)  # rodič: len otvára nody
+            finally:
+                try:
+                    os.unlink(OPEN_SOCK)
+                except OSError:
+                    pass
             return
 
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT, _on_signal)
+    try:
+        _listen()
+    finally:
+        _cleanup()
+
+
+def _listen():
     fds = {}
     for node in _keyboards():
         try:
