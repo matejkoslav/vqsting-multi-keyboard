@@ -141,6 +141,24 @@ def _drop_privileges(uid):
     os.setuid(uid)
 
 
+def _remove_if_ours(path):
+    """Delete a runtime file only when it belongs to this process."""
+    try:
+        with open(path) as f:
+            if int(f.read()) == os.getpid():
+                os.unlink(path)
+    except (OSError, ValueError):
+        pass
+
+
+def _cleanup():
+    _remove_if_ours(PID)
+
+
+def _on_signal(signum, frame):
+    raise SystemExit(0)
+
+
 def main():
     os.makedirs(RUN_DIR, mode=0o755, exist_ok=True)
 
@@ -156,9 +174,24 @@ def main():
         if os.fork() == 0:
             _drop_privileges(int(os.environ.get("PKEXEC_UID", os.getuid())))
         else:
-            _opener_loop(server)      # rodič: len otvára nody
+            try:
+                _opener_loop(server)  # rodič: len otvára nody
+            finally:
+                try:
+                    os.unlink(OPEN_SOCK)
+                except OSError:
+                    pass
             return
 
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT, _on_signal)
+    try:
+        _listen()
+    finally:
+        _cleanup()
+
+
+def _listen():
     fds = {}
     for node in _keyboards():
         try:
