@@ -159,7 +159,30 @@ def _on_signal(signum, frame):
     raise SystemExit(0)
 
 
+def _already_running():
+    """Return the pid of a live listener, or None."""
+    try:
+        with open(PID) as f:
+            pid = int(f.read())
+    except (OSError, ValueError):
+        return None
+    if pid == os.getpid():
+        return None
+    try:
+        os.kill(pid, 0)
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            cmdline = f.read()
+    except OSError:
+        return None
+    return pid if b"keyboard_listener" in cmdline else None
+
+
 def main():
+    running = _already_running()
+    if running:
+        print(f"listener už beží (pid {running})", file=sys.stderr)
+        raise SystemExit(1)
+
     os.makedirs(RUN_DIR, mode=0o755, exist_ok=True)
 
     if os.geteuid() == 0:
