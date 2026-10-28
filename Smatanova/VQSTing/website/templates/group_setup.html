@@ -32,12 +32,14 @@
         <a class="btn btn-link" href="{{ url_for('views.my_table_sessions') }}">Back to my sessions</a>
     </div>
 
-    <p class="text-muted mt-3">
-        <strong>Keyboard:</strong> click <em>Pair keyboard</em> in a column, then press any key
-        on that tester's keyboard. <strong>Age:</strong> type it on the tester's keyboard and press
-        <kbd>Enter</kbd>. Then <kbd>1</kbd> = wears glasses, <kbd>2</kbd> = no glasses.
-        Everything can also be filled with the mouse inputs in the column.
-    </p>
+    <div class="alert alert-light border mt-4 mb-0 small">
+        <strong>Pairing:</strong> click <em>Pair keyboard</em> in a column, then press any key on that
+        tester's keyboard.<br>
+        <strong>Age and glasses:</strong> the tester types on their own keyboard and the number appears
+        in their <em>Age</em> box — <kbd>Backspace</kbd> deletes, <kbd>Enter</kbd> saves.
+        Then <kbd>1</kbd> = wears glasses, <kbd>2</kbd> = no glasses.<br>
+        Everything can also be typed and clicked with the mouse in the column.
+    </div>
 </div>
 
 <script>
@@ -46,8 +48,10 @@
     const maxTesters = {{ max_testers }};
 
     let since = 0;
-    let pairingSeat = null;
-    const typing = {};   // seat -> {stage: 'age' | 'glasses' | null, text: ''}
+    const typing = {};                  // seat -> digits typed on that keyboard (unsaved)
+    const glasses = {};                 // seat -> true/false picked but maybe unsaved
+    const lastKey = {};                 // seat -> {key, at} for de-duplication
+    const stage = {};                   // seat -> 'age' | 'glasses'
 
     async function send(path, data) {
         await fetch(baseUrl + path, {
@@ -58,26 +62,39 @@
         refresh();
     }
 
+    function currentAgeText(seat, tester) {
+        const typed = typing[seat];
+        if (typed !== undefined && typed !== null) return typed;
+        const known = (tester || {}).age;
+        return known === null || known === undefined ? '' : String(known);
+    }
+
+    function ageBox(seat) {
+        return document.getElementById(`age-${seat}`);
+    }
+
     function columnHtml(seat) {
         return `
         <div class="card-body">
-            <h5 class="card-title">Tester ${seat}</h5>
+            <h5 class="card-title mb-1">Tester ${seat}</h5>
             <div class="small text-muted" data-role="keyboard">not paired</div>
-            <div class="small mt-2">Age: <span data-role="age">–</span></div>
-            <div class="small">Glasses: <span data-role="glasses">–</span></div>
-            <div class="small text-secondary" data-role="typed"></div>
+            <div class="small mt-2">
+                Saved age: <b data-role="age">–</b> ·
+                Glasses: <b data-role="glasses">–</b>
+            </div>
             <div class="small text-primary d-none" data-role="wait">Press any key on this keyboard…</div>
             <button type="button" class="btn btn-outline-primary btn-sm mt-2" data-role="pair">Pair keyboard</button>
             <hr>
-            <label class="form-label small mb-1">Age (mouse fallback)</label>
-            <input type="number" min="1" max="120" class="form-control form-control-sm" id="age-${seat}">
+            <label class="form-label small mb-1" for="age-${seat}">Age</label>
+            <input type="text" inputmode="numeric" maxlength="3" autocomplete="off"
+                   class="form-control" id="age-${seat}" placeholder="type on your keyboard">
+            <div class="small text-primary mt-1" data-role="stage"></div>
             <label class="form-label small mb-1 mt-2">Glasses</label>
-            <select class="form-select form-select-sm" id="glasses-${seat}">
-                <option value="">–</option>
-                <option value="1">yes</option>
-                <option value="0">no</option>
-            </select>
-            <button type="button" class="btn btn-secondary btn-sm mt-2" data-role="save">Save</button>
+            <div class="btn-group w-100" role="group">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-glasses="1">Yes</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-glasses="0">No</button>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm mt-2 w-100" data-role="save">Save</button>
         </div>`;
     }
 
@@ -87,16 +104,35 @@
         col.id = `col-${seat}`;
         col.dataset.seat = seat;
         col.innerHTML = columnHtml(seat);
+
         col.querySelector('[data-role="pair"]').addEventListener('click', () => send('/pair', {seat: seat}));
-        col.querySelector('[data-role="save"]').addEventListener('click', () => {
-            send('/tester', {
-                seat: seat,
-                age: document.getElementById(`age-${seat}`).value,
-                glasses: document.getElementById(`glasses-${seat}`).value
+        col.querySelector('[data-role="save"]').addEventListener('click', () => save(seat, false));
+        col.querySelectorAll('[data-glasses]').forEach(button => {
+            button.addEventListener('click', () => {
+                glasses[seat] = button.dataset.glasses === '1';
+                save(seat, false);
             });
         });
+        col.querySelector(`#age-${seat}`).addEventListener('keydown', event => {
+            if (event.key === 'Enter') save(seat, false);
+        });
+
         document.getElementById('columns').append(col);
         return col;
+    }
+
+    async function save(seat, keepStage) {
+        const payload = {seat: seat};
+        const age = (ageBox(seat).value || '').trim();
+        if (age) payload.age = age;
+        if (seat in glasses) payload.glasses = glasses[seat];
+        if (!age && !(seat in glasses)) return;
+
+        await send('/tester', payload);
+        typing[seat] = null;
+        if (!keepStage) stage[seat] = null;
+        delete glasses[seat];
+        ageBox(seat).value = age;
     }
 
     function render(testers, pairingSeatNow) {
@@ -117,20 +153,32 @@
                 tester.age === null ? '–' : tester.age;
             column.querySelector('[data-role="glasses"]').textContent =
                 tester.glasses === null ? '–' : (tester.glasses ? 'yes' : 'no');
-            column.querySelector('[data-role="wait"]').classList.toggle('d-none', pairingSeatNow !== tester.seat);
+            column.querySelector('[data-role="wait"]').classList.toggle(
+                'd-none', pairingSeatNow !== tester.seat);
 
-            const state = typing[tester.seat];
-            let typed = '';
-            if (state && state.stage === 'age' && state.text) typed = `typed age: ${state.text}`;
-            if (state && state.stage === 'glasses') typed = 'press 1 = glasses, 2 = no glasses';
-            column.querySelector('[data-role="typed"]').textContent = typed;
-
-            const ageInput = column.querySelector(`#age-${tester.seat}`);
-            const glassesInput = column.querySelector(`#glasses-${tester.seat}`);
-            if (document.activeElement !== ageInput) ageInput.value = tester.age === null ? '' : tester.age;
-            if (document.activeElement !== glassesInput) {
-                glassesInput.value = tester.glasses === null ? '' : (tester.glasses ? '1' : '0');
+            const input = column.querySelector(`#age-${tester.seat}`);
+            const typed = typing[tester.seat];
+            if (document.activeElement !== input) {
+                input.value = typed !== undefined && typed !== null
+                    ? typed
+                    : (tester.age === null ? '' : tester.age);
             }
+
+            let hint = '';
+            if (stage[tester.seat] === 'glasses') {
+                hint = 'press 1 = wears glasses, 2 = no glasses';
+            } else if (typed !== undefined && typed !== null) {
+                hint = 'press Enter to save the age';
+            }
+            column.querySelector('[data-role="stage"]').textContent = hint;
+
+            const chosen = tester.seat in glasses ? glasses[tester.seat] : tester.glasses;
+            column.querySelectorAll('[data-glasses]').forEach(button => {
+                const isOn = chosen !== null && chosen !== undefined
+                    && (button.dataset.glasses === '1') === chosen;
+                button.classList.toggle('btn-dark', isOn);
+                button.classList.toggle('btn-outline-secondary', !isOn);
+            });
         }
     }
 
@@ -141,24 +189,32 @@
                 && candidate.keyboard_id === event.device_id);
             if (!tester) continue;
             if (event.seq <= (tester.last_seq || 0)) continue;
-            if (!typing[tester.seat]) typing[tester.seat] = {stage: 'age', text: ''};
-            const state = typing[tester.seat];
 
-            if (state.stage === 'age') {
-                if (/^[0-9]$/.test(event.key) && state.text.length < 3) {
-                    state.text += event.key;
-                } else if (event.key === 'Backspace') {
-                    state.text = state.text.slice(0, -1);
-                } else if (event.key === 'Enter' && state.text) {
-                    send('/tester', {seat: tester.seat, age: state.text});
-                    state.text = '';
-                    state.stage = 'glasses';
-                }
-            } else if (state.stage === 'glasses') {
-                if (event.key === '1' || event.key === '2') {
-                    send('/tester', {seat: tester.seat, glasses: event.key === '1'});
-                    state.stage = null;
-                }
+            // One physical key can show up twice (keyboard + control node with
+            // the same device id). Ignore a repeat of the same key within 40 ms.
+            const previous = lastKey[tester.seat];
+            if (previous && previous.key === event.key && event.at - previous.at < 0.04) continue;
+            lastKey[tester.seat] = {key: event.key, at: event.at};
+
+            const seat = tester.seat;
+            const inGlasses = stage[seat] === 'glasses';
+
+            if (inGlasses && (event.key === '1' || event.key === '2')) {
+                glasses[seat] = event.key === '1';
+                stage[seat] = null;
+                save(seat);
+                continue;
+            }
+
+            if (/^[0-9]$/.test(event.key)) {
+                stage[seat] = 'age';
+                typing[seat] = (currentAgeText(seat, tester) + event.key).slice(0, 3);
+            } else if (event.key === 'Backspace') {
+                stage[seat] = 'age';
+                typing[seat] = currentAgeText(seat, tester).slice(0, -1);
+            } else if (event.key === 'Enter') {
+                stage[seat] = 'glasses';
+                save(seat, true);
             }
         }
     }
@@ -168,14 +224,7 @@
         if (!response.ok) return;
         const data = await response.json();
 
-        pairingSeat = data.pairing_seat;
         document.getElementById('listener-warning').classList.toggle('d-none', data.listener);
-
-        for (const tester of data.testers) {
-            if (tester.keyboard_id && !typing[tester.seat]) {
-                typing[tester.seat] = {stage: 'age', text: ''};
-            }
-        }
 
         handleEvents(data.testers, data.events);
         render(data.testers, data.pairing_seat);
