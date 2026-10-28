@@ -18,8 +18,6 @@
 
   <link rel="stylesheet" href="/static/style.css">
 
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-
   <title>{% block title %}Base{% endblock %}</title>
 </head>
 
@@ -49,14 +47,10 @@
             </a>
             <div class="dropdown-menu dropdown_pos" aria-labelledby="navbarDropdown">
 
-              {% if user.role==10 %}
+              <a class="dropdown-item" href="/">Home</a>
               <a class="dropdown-item" href="/create-test">Create new test session</a>
               <a class="dropdown-item" href="/my-table-sessions">My test sessions</a>
               <a class="dropdown-item" href="/keyboards">Keyboards</a>
-              {% else %}
-              <a class="dropdown-item" href="/sessions-list">Test sessions list</a>
-              <a class="dropdown-item" href="/profile-info">My profile</a>
-              {% endif %}
               <div class="dropdown-divider"></div>
               <a class="dropdown-item" href="/logout">Logout</a>
             </div>
@@ -74,9 +68,6 @@
         <ul class="nav navbar-nav navbar-right">
           <li class="nav-item pe-5">
             <a class="nav-link header_text" href="/login">Login</a>
-          </li>
-          <li class="nav-item  pe-5">
-            <a class="nav-link header_text" href="/register">Register</a>
           </li>
         </ul>
       </div>

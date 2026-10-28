@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Group test{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid px-4 mb-5">
+    <h1 class="text-center mt-4">{{ session.name }}</h1>
+    <p class="text-center">
+        <span class="badge bg-secondary">Method: {{ session.test_method|upper }}</span>
+        <span class="badge bg-secondary">{{ run.phase }}</span>
+    </p>
+
+    <div id="listener-warning" class="alert alert-danger d-none">
+        Keyboard listener is not running. Pairing and voting by keyboard will not work —
+        use the mouse inputs in each column.
+    </div>
+
+    <div id="columns" class="row g-3"></div>
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mt-4">
+        <button id="add" type="button" class="btn btn-outline-primary">Add tester</button>
+        <form method="POST" action="{{ url_for('group.training', id_session=session.id) }}">
+            <button type="submit" class="btn btn-outline-secondary">Training</button>
+        </form>
+        <form method="POST" action="{{ url_for('group.start', id_session=session.id) }}">
+            <button id="start" type="submit" class="btn btn-success">Start</button>
+        </form>
+        <form method="POST" action="{{ url_for('group.reset', id_session=session.id) }}"
+              onsubmit="return confirm('Reset the group run and delete all votes?');">
+            <button type="submit" class="btn btn-outline-danger">Reset</button>
+        </form>
+        <a class="btn btn-link" href="{{ url_for('views.my_table_sessions') }}">Back to my sessions</a>
+    </div>
+
+    <p class="text-muted mt-3">
+        <strong>Keyboard:</strong> click <em>Pair keyboard</em> in a column, then press any key
+        on that tester's keyboard. <strong>Age:</strong> type it on the tester's keyboard and press
+        <kbd>Enter</kbd>. Then <kbd>1</kbd> = wears glasses, <kbd>2</kbd> = no glasses.
+        Everything can also be filled with the mouse inputs in the column.
+    </p>
+</div>
+
+<script>
+    const stateUrl = "{{ url_for('group.state', id_session=session.id) }}";
+    const baseUrl = "{{ url_for('group.setup', id_session=session.id) }}";
+    const maxTesters = {{ max_testers }};
+
+    let since = 0;
+    let pairingSeat = null;
+    const typing = {};   // seat -> {stage: 'age' | 'glasses' | null, text: ''}
+
+    async function send(path, data) {
+        await fetch(baseUrl + path, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        refresh();
+    }
+
+    function columnHtml(seat) {
+        return `
+        <div class="card-body">
+            <h5 class="card-title">Tester ${seat}</h5>
+            <div class="small text-muted" data-role="keyboard">not paired</div>
+            <div class="small mt-2">Age: <span data-role="age">–</span></div>
+            <div class="small">Glasses: <span data-role="glasses">–</span></div>
+            <div class="small text-secondary" data-role="typed"></div>
+            <div class="small text-primary d-none" data-role="wait">Press any key on this keyboard…</div>
+            <button type="button" class="btn btn-outline-primary btn-sm mt-2" data-role="pair">Pair keyboard</button>
+            <hr>
+            <label class="form-label small mb-1">Age (mouse fallback)</label>
+            <input type="number" min="1" max="120" class="form-control form-control-sm" id="age-${seat}">
+            <label class="form-label small mb-1 mt-2">Glasses</label>
+            <select class="form-select form-select-sm" id="glasses-${seat}">
+                <option value="">–</option>
+                <option value="1">yes</option>
+                <option value="0">no</option>
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm mt-2" data-role="save">Save</button>
+        </div>`;
+    }
+
+    function createColumn(seat) {
+        const col = document.createElement('div');
+        col.className = 'col-12';
+        col.id = `col-${seat}`;
+        col.dataset.seat = seat;
+        col.innerHTML = columnHtml(seat);
+        col.querySelector('[data-role="pair"]').addEventListener('click', () => send('/pair', {seat: seat}));
+        col.querySelector('[data-role="save"]').addEventListener('click', () => {
+            send('/tester', {
+                seat: seat,
+                age: document.getElementById(`age-${seat}`).value,
+                glasses: document.getElementById(`glasses-${seat}`).value
+            });
+        });
+        document.getElementById('columns').append(col);
+        return col;
+    }
+
+    function render(testers, pairingSeatNow) {
+        const wrap = document.getElementById('columns');
+        const seats = new Set(testers.map(tester => tester.seat));
+        wrap.querySelectorAll('[data-seat]').forEach(column => {
+            if (!seats.has(Number(column.dataset.seat))) column.remove();
+        });
+
+        const width = 12 / Math.max(testers.length, 1);
+        for (const tester of testers) {
+            const column = document.getElementById(`col-${tester.seat}`) || createColumn(tester.seat);
+            column.className = `col-12 col-lg-${width}`;
+
+            column.querySelector('[data-role="keyboard"]').textContent =
+                tester.keyboard_id ? tester.keyboard_name : 'not paired';
+            column.querySelector('[data-role="age"]').textContent =
+                tester.age === null ? '–' : tester.age;
+            column.querySelector('[data-role="glasses"]').textContent =
+                tester.glasses === null ? '–' : (tester.glasses ? 'yes' : 'no');
+            column.querySelector('[data-role="wait"]').classList.toggle('d-none', pairingSeatNow !== tester.seat);
+
+            const state = typing[tester.seat];
+            let typed = '';
+            if (state && state.stage === 'age' && state.text) typed = `typed age: ${state.text}`;
+            if (state && state.stage === 'glasses') typed = 'press 1 = glasses, 2 = no glasses';
+            column.querySelector('[data-role="typed"]').textContent = typed;
+
+            const ageInput = column.querySelector(`#age-${tester.seat}`);
+            const glassesInput = column.querySelector(`#glasses-${tester.seat}`);
+            if (document.activeElement !== ageInput) ageInput.value = tester.age === null ? '' : tester.age;
+            if (document.activeElement !== glassesInput) {
+                glassesInput.value = tester.glasses === null ? '' : (tester.glasses ? '1' : '0');
+            }
+        }
+    }
+
+    function handleEvents(testers, events) {
+        for (const event of events) {
+            if (event.seq > since) since = event.seq;
+            const tester = testers.find(candidate => candidate.keyboard_id
+                && candidate.keyboard_id === event.device_id);
+            if (!tester) continue;
+            if (event.seq <= (tester.last_seq || 0)) continue;
+            if (!typing[tester.seat]) typing[tester.seat] = {stage: 'age', text: ''};
+            const state = typing[tester.seat];
+
+            if (state.stage === 'age') {
+                if (/^[0-9]$/.test(event.key) && state.text.length < 3) {
+                    state.text += event.key;
+                } else if (event.key === 'Backspace') {
+                    state.text = state.text.slice(0, -1);
+                } else if (event.key === 'Enter' && state.text) {
+                    send('/tester', {seat: tester.seat, age: state.text});
+                    state.text = '';
+                    state.stage = 'glasses';
+                }
+            } else if (state.stage === 'glasses') {
+                if (event.key === '1' || event.key === '2') {
+                    send('/tester', {seat: tester.seat, glasses: event.key === '1'});
+                    state.stage = null;
+                }
+            }
+        }
+    }
+
+    async function refresh() {
+        const response = await fetch(`${stateUrl}?since=${since}`);
+        if (!response.ok) return;
+        const data = await response.json();
+
+        pairingSeat = data.pairing_seat;
+        document.getElementById('listener-warning').classList.toggle('d-none', data.listener);
+
+        for (const tester of data.testers) {
+            if (tester.keyboard_id && !typing[tester.seat]) {
+                typing[tester.seat] = {stage: 'age', text: ''};
+            }
+        }
+
+        handleEvents(data.testers, data.events);
+        render(data.testers, data.pairing_seat);
+
+        document.getElementById('start').disabled = data.testers.length === 0
+            || data.testers.some(tester => tester.age === null);
+        document.getElementById('add').disabled = data.testers.length >= maxTesters;
+    }
+
+    document.getElementById('add').addEventListener('click', () => send('/add', {}));
+
+    refresh();
+    setInterval(refresh, 500);
+</script>
+
+{% endblock %}
