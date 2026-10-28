@@ -145,6 +145,16 @@ def listener_lifecycle_checks():
 
         keyboard_listener._cleanup()
         check("listener: cleanup without a pid file is safe", True)
+
+        with open(pid_path, "w") as f:
+            f.write(str(os.getpid()))
+        check("listener: a live non-listener pid is not 'already running'",
+              keyboard_listener._already_running() is None)
+
+        with patch("tools.keyboard_listener.os.kill",
+                   side_effect=ProcessLookupError):
+            check("listener: a stale pid is not 'already running'",
+                  keyboard_listener._already_running() is None)
     finally:
         keyboard_listener.PID = original
         shutil.rmtree(tmp, ignore_errors=True)
