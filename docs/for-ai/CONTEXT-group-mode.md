@@ -273,3 +273,22 @@ s Matejom sme z neho spravili len životný cyklus pid súboru (vetva
 | `/health` endpoint | **nie** | `/keyboards/state` už vracia `listener`, `age`, `seq` |
 | systemd user unit | **nie** | appka je demo na jednom PC, spúšťa sa ručne |
 | udev ACL namiesto root openera | **možno neskôr** | ekvivalent bezpečnosti, viac systémovej konfigurácie |
+
+## 12. UI pravidlá (malé, ale držia sa)
+
+- Odpočet kola je v **celých sekundách** (`9 8 7 …`), nikdy s desatinami.
+- Myš: **jeden klik na číslo hlasuje**. Žiadne „najprv označ stĺpec". Hlas sa dá
+  zmeniť do zavretia kola.
+- Po uložení veku/okuliarov blikne `✓ saved` na 1,5 s.
+- Testér píše vek na svojej klávesnici a číslo sa objaví v jeho `Age` boxe;
+  `Enter` uloží a prepne stĺpec na okuliare (`1` = áno, `2` = nie).
+- Po zatvorení kola sa zobrazuje iba hlas z **tohto** kola. Kto nehlasoval, má
+  `… waiting`, v tabuľke `n/a` (sivé). Nikdy sa nezobrazuje hlas z minulého videa.
+- Jazyk UI je **angličtina** — rovnako ako pôvodná appka. Neprekladáme.
+
+## 13. Stav Windows vetvy
+
+`feature/windows-listener` je **hotová a pripravená na test**, ale **nikto ju ešte
+nespustil na reálnom Windows HW**. `--selftest` prechádza aj v CI, ale rozlíšenie
+dvoch klávesníc sa overuje len manuálne podľa `docs/for-humans/windows-test.md`.
+Do Patrikovho potvrdenia ju nepovažuj za overenú.
