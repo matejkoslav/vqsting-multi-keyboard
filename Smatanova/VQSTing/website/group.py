@@ -351,6 +351,8 @@ def start(id_session):
         flash('This session has no videos to test.', category='error')
         return redirect(url_for('group.setup', id_session=session.id))
 
+    # a second run must not inherit the votes of the previous one
+    GroupVote.query.filter_by(id_group_run=run.id).delete()
     run.order = ", ".join(str(video_id) for video_id in order)
     run.current_id = 0
     run.phase = "running"

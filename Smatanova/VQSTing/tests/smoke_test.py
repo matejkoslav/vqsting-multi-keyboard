@@ -455,6 +455,32 @@ def group_checks():
               and "/group/1" in response.headers.get("Location", ""),
               str(response.status_code))
 
+        # a second run must not inherit the votes of the first one
+        client.post("/group/1/reset")
+        client.post("/group/1/add", json={})
+        client.post("/group/1/add", json={})
+        client.post("/group/1/tester", json={"seat": 1, "age": 23})
+        client.post("/group/1/tester", json={"seat": 2, "age": 31})
+        for seat, keyboard in ((1, "linux:kbd1"), (2, "linux:kbd2")):
+            client.post("/group/1/pair", json={"seat": seat})
+            listener.press(keyboard, "Enter")
+            client.get("/group/1/state")
+        with patch("website.group.play_videos"):
+            client.post("/group/1/start")
+            client.get("/group/1/play")
+        listener.press("linux:kbd1", "4")
+        listener.press("linux:kbd2", "2")
+        client.get("/group/1/state")
+        with app.app_context():
+            run = GroupRun.query.filter_by(id_session=1).first()
+            before = GroupVote.query.filter_by(id_group_run=run.id).count()
+        with patch("website.group.play_videos"):
+            client.post("/group/1/start")
+        with app.app_context():
+            run = GroupRun.query.filter_by(id_session=1).first()
+            after = GroupVote.query.filter_by(id_group_run=run.id).count()
+        check("group: a second start clears the votes of the first run",
+              before == 2 and after == 0, f"{before} -> {after}")
         client.post("/group/1/reset")
     finally:
         os.chdir(original_cwd)
