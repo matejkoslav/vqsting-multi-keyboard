@@ -436,11 +436,25 @@ def group_checks():
         response = client.post("/group/1/add", json={})
         check("group: a fifth tester is refused", response.status_code == 400,
               str(response.status_code))
+
+        listener.press("linux:kbd3", "Enter")   # pressed before pairing is armed
+        client.post("/group/1/pair", json={"seat": 1})
+        state = client.get("/group/1/state").get_json()
+        check("group: only a key pressed after arming pairs a keyboard",
+              state["testers"][0]["keyboard_id"] is None and state["pairing_seat"] == 1,
+              str(state["testers"][0]))
+        listener.press("linux:kbd1", "Enter")
+        state = client.get("/group/1/state").get_json()
+        check("group: a key pressed after arming pairs the keyboard",
+              state["testers"][0]["keyboard_id"] == "linux:kbd1",
+              str(state["testers"][0]))
+
         response = client.post("/group/1/start")
         check("group: start needs an age for every tester",
               response.status_code == 302
               and "/group/1" in response.headers.get("Location", ""),
               str(response.status_code))
+
         client.post("/group/1/reset")
     finally:
         os.chdir(original_cwd)
