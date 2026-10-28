@@ -129,10 +129,13 @@ def listener_checks():
 
 def windows_listener_checks():
     script = os.path.join(BASE_DIR, "tools", "windows_keyboard_listener.py")
+    # PYTHONIOENCODING=ascii imitates the cp1252 console on Windows: any
+    # non-ASCII print would crash the listener before it can exit 0.
+    env = dict(os.environ, PYTHONIOENCODING="ascii")
     result = subprocess.run([sys.executable, script, "--selftest"],
-                            capture_output=True, text=True)
-    check("windows listener: --selftest exits 0", result.returncode == 0,
-          (result.stdout + result.stderr).strip())
+                            capture_output=True, text=True, env=env)
+    check("windows listener: --selftest exits 0 on a plain console",
+          result.returncode == 0, (result.stdout + result.stderr).strip())
 
 
 def make_app():

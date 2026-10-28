@@ -296,7 +296,7 @@ def selftest():
     assert device_label(names[0]) == "VID_046D&PID_C31C", device_label(names[0])
     assert device_label(names[1]) == "PNP0303", device_label(names[1])
     assert device_label("no-hash") == "no-hash"
-    print("[OK] instančná cesta a stabilné id")
+    print("[OK] instance path and stable id")
 
     for vkey, expected in [(0x31, "1"), (0x32, "2"), (0x33, "3"), (0x34, "4"),
                            (0x35, "5"), (0x30, "0"), (0x61, "1"), (0x69, "9"),
@@ -305,7 +305,7 @@ def selftest():
         assert key_name(vkey) == expected, (hex(vkey), key_name(vkey))
     digits = {key_name(0x31 + i) for i in range(5)}
     assert digits == {"1", "2", "3", "4", "5"}, digits
-    print("[OK] mapovanie VKey na názov klávesy")
+    print("[OK] VKey to key name")
 
     state = ListenerState()
     state.press("win:7&2f&0&0000", r"\\?\HID#kbd1#7&2f&0&0000#{x}", "7&2f&0&0000", "1", at=100.0)
@@ -322,7 +322,7 @@ def selftest():
     assert last["win:7&2f&0&0000"]["key"] == "Enter"
     assert last["win:7&2f&0&0000"]["at"] == 100.5
     assert last["win:5&1a&0&0000"]["key"] == "3"
-    print("[OK] stavový JSON zo syntetických eventov")
+    print("[OK] state JSON from synthetic events")
 
     for _ in range(EVENTS_KEPT + 6):
         state.press("win:7&2f&0&0000", "kbd1", "7&2f&0&0000", "2", at=200.0)
@@ -330,7 +330,7 @@ def selftest():
     assert len(events) == EVENTS_KEPT, len(events)
     assert events[0]["seq"] == state.seq - EVENTS_KEPT + 1
     assert events[-1]["seq"] == state.seq
-    print(f"[OK] krúžkový buffer drží posledných {EVENTS_KEPT} eventov")
+    print(f"[OK] ring buffer keeps the last {EVENTS_KEPT} events")
 
     path = os.path.join(tempfile.mkdtemp(prefix="vqsting-selftest-"), "keyboards.json")
     try:
@@ -340,13 +340,23 @@ def selftest():
             assert json.load(f) == payload
     finally:
         shutil.rmtree(os.path.dirname(path), ignore_errors=True)
-    print("[OK] atomický zápis stavu")
+    print("[OK] atomic state write")
 
     print("selftest OK")
     return 0
 
 
+def soften_console():
+    """A cp1252 console must never kill the listener over a device name."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv=None):
+    soften_console()
     argv = sys.argv[1:] if argv is None else argv
     if "--selftest" in argv:
         return selftest()
