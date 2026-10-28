@@ -30,12 +30,15 @@ Ak `python` nefunguje, skús `py` namiesto `python` (Python z python.org).
 **Čo musíš vidieť** (poradie riadkov nemusí byť presne takéto, ale text áno):
 
 ```text
-[OK] instančná cesta a stabilné id
-[OK] mapovanie VKey na názov klávesy
-[OK] stavový JSON zo syntetických eventov
-[OK] krúžkový buffer drží posledných 64 eventov
-[OK] atomický zápis stavu
+[OK] instance path and stable id
+[OK] VKey to key name
+[OK] state JSON from synthetic events
+[OK] ring buffer keeps the last 64 events
+[OK] atomic state write
 selftest OK
+
+Výstup je zámerne anglický. Windows konzola má predvolene `cp1252` a slovenské
+znaky v nej zhodia proces ešte pred koncom testu, preto sú správy ASCII.
 ```
 
 **Čo poslať späť:** celý tento výstup. Ak je tam `Traceback`, pošli aj ten
