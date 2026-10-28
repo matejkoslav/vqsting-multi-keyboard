@@ -12,6 +12,7 @@ import csv
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -210,6 +211,17 @@ def listener_lifecycle_checks():
     finally:
         keyboard_listener.PID = original
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def windows_listener_checks():
+    script = os.path.join(BASE_DIR, "tools", "windows_keyboard_listener.py")
+    # PYTHONIOENCODING=ascii imitates the cp1252 console on Windows: any
+    # non-ASCII print would crash the listener before it can exit 0.
+    env = dict(os.environ, PYTHONIOENCODING="ascii")
+    result = subprocess.run([sys.executable, script, "--selftest"],
+                            capture_output=True, text=True, env=env)
+    check("windows listener: --selftest exits 0 on a plain console",
+          result.returncode == 0, (result.stdout + result.stderr).strip())
 
 
 def make_app():
@@ -574,6 +586,7 @@ def main():
         listener_lifecycle_checks()
     if not IS_WINDOWS:
         listener_checks()
+    windows_listener_checks()
 
     # --- platform helpers -------------------------------------------------
     expected = "video" + os.sep + "ExampleTest" + os.sep + "test_seq"
