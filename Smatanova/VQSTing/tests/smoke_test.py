@@ -175,7 +175,8 @@ def main():
           sys.platform)
 
     keyboards_checks()
-    listener_lifecycle_checks()
+    if not IS_WINDOWS:
+        listener_lifecycle_checks()
     if not IS_WINDOWS:
         listener_checks()
 
