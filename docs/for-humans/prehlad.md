@@ -17,11 +17,20 @@ Náš cieľ: **viac ľudí na jednom PC naraz** — každý tester má vlastnú 
 
 Viď `plan.md`.
 
-## Ako sa to spustí (na Windows)
-1. Dvojklik na `VQSTing.bat` (prvé spustenie je pomalé — inštaluje knižnice).
-2. Otvorí sa `http://127.0.0.1:5000`.
-3. Login `admin / admin` → `My test sessions` → `ExampleTest`.
-4. Nový účastník: `Register` → vyplní profil → vyberie test → zadá heslo od admina.
+## Ako sa to spustí
+1. `cd Smatanova/VQSTing && pip install -r requirements.txt` (raz).
+2. Linux: `./run.sh` · Windows: dvojklik na `run.bat`.
+3. `http://127.0.0.1:5000` → login `admin` / `admin`.
+4. `My test sessions` → pri teste **Group test** → pridať testérov, spárovať
+   klávesnice, vyplniť vek a okuliare, `Start`.
+
+Podrobný postup: `docs/for-humans/group-mode.md`.
+
+## Ako to funguje pre testéra
+Testér nemá účet ani heslo. Sadne si ku klávesnici, admin ju spáruje („stlač
+ľubovoľnú klávesu") a od tej chvíle je jeho identitou. Vek a okuliare napíše
+sám na svojej klávesnici. Všetci pozerajú to isté video na jednom monitore
+a po ňom každý stlačí 1–5 na svojej klávesnici (alebo klikne myšou).
 
 ## Prečo sa to netestuje na VM
 - VM ani Docker **nedokážu rozlíšiť viac klávesníc podľa USB portu** — a to je presne funkcia, ktorú pridávame.

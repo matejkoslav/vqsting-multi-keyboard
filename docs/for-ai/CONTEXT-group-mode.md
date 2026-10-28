@@ -288,7 +288,10 @@ s Matejom sme z neho spravili len životný cyklus pid súboru (vetva
 
 ## 13. Stav Windows vetvy
 
-`feature/windows-listener` je **hotová a pripravená na test**, ale **nikto ju ešte
-nespustil na reálnom Windows HW**. `--selftest` prechádza aj v CI, ale rozlíšenie
-dvoch klávesníc sa overuje len manuálne podľa `docs/for-humans/windows-test.md`.
-Do Patrikovho potvrdenia ju nepovažuj za overenú.
+`feature/windows-listener` je zmergovaná do `main` a **overená na reálnom Windows
+HW** (28.10.2026): dve fyzické klávesnice dostali dve rôzne `id` a hlasy padli
+správnym stĺpcom. `--selftest` beží v CI na Ubuntu aj Windows.
+
+Stále platí: CI runner nemá dve klávesnice, takže rozlíšenie zariadení sa nedá
+overiť automaticky — pri akejkoľvek zmene v listeneri treba manuálny test podľa
+`docs/for-humans/windows-test.md`.

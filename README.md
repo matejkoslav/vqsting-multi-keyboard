@@ -6,7 +6,10 @@ o novú funkciu: **viac testerov na jednom PC, každý s vlastnou klávesnicou**
 - Pôvodná appka: Lenka Smatanová, ŽU FEIT (2024)
 - Náš cieľ: 1 PC + N klávesníc → každý tester hodnotí na svojej
 
-> Appka beží na **Windows aj Linux** (od 18.10.2026). Keyboard tracking je zatiaľ **Linux-only**.
+> Appka beží na **Windows aj Linux**. Viac testerov na jednom PC funguje na oboch:
+> Linux číta `/dev/input`, Windows Raw Input, zvyšok appky je spoločný.
+>
+> Ako spustiť skupinový test: **[docs/for-humans/group-mode.md](docs/for-humans/group-mode.md)**.
 
 ## 👉 Začni tu
 

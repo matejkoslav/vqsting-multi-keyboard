@@ -35,14 +35,20 @@ Alternatíva bez Gitu: na GitHube **Code → Download ZIP**. Pozor: so ZIPom neb
 
 ```bash
 cd Smatanova/VQSTing
-pip install flask flask_sqlalchemy flask_login plotly
-python main.py
+pip install -r requirements.txt
 ```
 
-Potom otvor <http://127.0.0.1:5000>.
+Potom podľa systému:
+
+- **Linux:** `./run.sh` — spustí aj listener klávesníc (pýta `pkexec`), aj appku.
+  Vypnutie: `Ctrl+C`, prípadne `./stop.sh`.
+- **Windows:** dvojklik na `run.bat` — spustí listener aj appku (`stop.bat` ho vypne).
+  Alebo klasicky `python main.py` (appka pobeží, klávesnice sa nerozlíšia).
+
+Otvor <http://127.0.0.1:5000>.
 
 - Prvé spustenie je pomalé (inštalujú sa knižnice).
-- Terminál musí bežať celý čas. Vypnutie: `Ctrl+C`.
+- Terminál musí bežať celý čas.
 
 **Na plný test** (prehrávanie videí) treba mať na týchto cestách:
 - `Smatanova/VQSTing/mpv.exe` — prehrávač,
@@ -53,8 +59,13 @@ Toto v repe nie je → skopíruj od Mateja na tie isté cesty.
 ## 4. Prihlásenie a rýchly test
 
 1. <http://127.0.0.1:5000> → login **`admin` / `admin`**.
-2. `My test sessions` → `ExampleTest` → `Details / Statistics / Export`.
-3. Nový účastník: odhlás sa → `Register` → vyplň profil → `Test sessions list` → zadaj heslo testu.
+2. `My test sessions` → `ExampleTest` → `Details / Export`.
+3. **Skupinový test:** v tom istom riadku klikni **Group test**.
+   Pridaj 1–4 testérov, spáruj klávesnice (testér stlačí ľubovoľnú klávesu),
+   testéri vyplnia vek a okuliare na svojej klávesnici, potom **Start**.
+
+Účastnícke účty už neexistujú — testér nemá meno ani heslo, identitou je jeho
+klávesnica. Celý postup: **[docs/for-humans/group-mode.md](docs/for-humans/group-mode.md)**.
 
 ## 5. Ako prispieť kódom (push)
 

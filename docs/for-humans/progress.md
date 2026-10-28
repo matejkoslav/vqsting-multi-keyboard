@@ -1,5 +1,20 @@
 # Progress — living list
 
+Aktualizované: 28.10.2026 · `main` = `71bc32d` · group mode aj Windows listener zmergované
+
+## ✅ Hotové (28.10.2026): group mode — N testérov na jednom PC
+- [x] účastnícke účty zrušené: testér = stĺpec v behu testu, nie `User`
+- [x] nové tabuľky `GroupRun`, `Tester`, `GroupVote` (bez migrácie starých)
+- [x] párovanie klávesníc („stlač klávesu"), demografia na vlastnej klávesnici
+- [x] hlasovanie: klávesa 1–5 alebo jeden klik myšou, 9 s okno, hlas z aktuálneho kola
+- [x] spoločné poradie videí, results tabuľka, export CSV s demografiou
+- [x] Linux listener posiela `seq` + 64-eventový buffer + stabilné `id` zariadenia
+- [x] **Windows listener (Raw Input)** — overený na reálnom HW: rozlíši dve klávesnice
+- [x] pid lifecycle: mazanie pri ukončení, `stop.sh` overí proces, guard proti druhému listeneru
+- [x] smoke test je izolovaný (nezráža ho rozrobený beh v `database.db`)
+- [x] CI zelené na Ubuntu aj Windows
+- [x] dokumentácia: `group-mode.md`, `windows-test.md`, `CONTEXT-group-mode.md`, `GLOSSARY.md`, 2 ADR
+
 Aktualizované: 22.10.2026 · branch `feature/keyboard-identity` — pushnuté, čaká CI
 
 ## ✅ Hotové (18.10.2026)
@@ -37,14 +52,13 @@ Appka vie, **z ktorej fyzickej klávesnice** prišlo stlačenie, a zobrazuje to 
 - [ ] **manuálny test:** doplniť druhú (KILO BT) klávesnicu a overiť 2 riadky
 
 ## ⏭️ Next actionable steps
-1. **Doplniť druhú klávesnicu:** zapnúť KILO BT, `./run.sh`, overiť 2 riadky na `/keyboards`
-2. **Patrik:** prejsť Windows checklist na reálnom Windows (overiť pôvodnú appku)
-3. **Merge:** `feature/keyboard-identity` → `main` (pushnuté; čaká CI + BT test)
-4. **Windows tracking:** Raw Input (`hDevice` → `RIDI_DEVICENAME`) v
-   `tools/keyboard_listener.py` — Flask/stránka ostávajú rovnaké, bez roota
-5. **Users rework:** tester-sloty bez hesla (potrebuje rozhodnutia: login áno/nie,
-   kto zakladá testerov) — predpoklad pre napojenie klávesníc na testerov
-6. Napojiť identitu klávesnice na slot testera + hlasovanie 1–5
+Všetko z pôvodného zoznamu je hotové (28.10.2026):
+druhá klávesnica overená, Windows checklist prejdený, `feature/keyboard-identity`
+aj `feature/windows-raw-input-probe` zmergované, Raw Input hotový, users rework
+spravený, identita klávesnice napojená na stĺpec testéra.
+
+Ostáva už len škola: elaborát, prezentácia a pondelkový meeting s Uhrínom
+(viď `TODO-matej.md`).
 
 ## 🚀 Ako spustiť (Linux, tracking)
 
