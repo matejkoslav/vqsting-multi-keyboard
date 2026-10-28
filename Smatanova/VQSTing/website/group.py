@@ -305,6 +305,9 @@ def pair(id_session):
     if seat is None or not 1 <= seat <= MAX_TESTERS:
         return jsonify({"error": f"seat must be 1..{MAX_TESTERS}"}), 400
     _ensure_tester(run, seat)
+    # Ignore everything already in the listener buffer: only a key pressed
+    # after this request may bind. Same cursor trick as at the start of a round.
+    _sync_last_seq(_testers(run), keyboards.state().get("seq", 0))
     run.pairing_seat = seat
     db.session.commit()
     return jsonify({"ok": True, "pairing_seat": seat})
