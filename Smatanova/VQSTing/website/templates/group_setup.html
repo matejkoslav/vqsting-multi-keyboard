@@ -52,6 +52,7 @@
     const glasses = {};                 // seat -> true/false picked but maybe unsaved
     const lastKey = {};                 // seat -> {key, at} for de-duplication
     const stage = {};                   // seat -> 'age' | 'glasses'
+    const savedTimer = {};              // seat -> timeout id for the saved badge
 
     async function send(path, data) {
         await fetch(baseUrl + path, {
@@ -81,6 +82,7 @@
             <div class="small mt-2">
                 Saved age: <b data-role="age">–</b> ·
                 Glasses: <b data-role="glasses">–</b>
+                <span class="text-success fw-bold ms-1" data-role="saved"></span>
             </div>
             <div class="small text-primary d-none" data-role="wait">Press any key on this keyboard…</div>
             <button type="button" class="btn btn-outline-primary btn-sm mt-2" data-role="pair">Pair keyboard</button>
@@ -133,6 +135,16 @@
         if (!keepStage) stage[seat] = null;
         delete glasses[seat];
         ageBox(seat).value = age;
+        flashSaved(seat);
+    }
+
+    function flashSaved(seat) {
+        const column = document.getElementById(`col-${seat}`);
+        if (!column) return;
+        const badge = column.querySelector('[data-role="saved"]');
+        badge.textContent = '✓ saved';
+        clearTimeout(savedTimer[seat]);
+        savedTimer[seat] = setTimeout(() => { badge.textContent = ''; }, 1500);
     }
 
     function render(testers, pairingSeatNow) {
