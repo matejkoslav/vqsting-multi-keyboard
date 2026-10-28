@@ -120,6 +120,36 @@ def listener_checks():
           str(names))
 
 
+def listener_lifecycle_checks():
+    """pid file must never outlive its listener, and never kill a stranger."""
+    import tempfile
+    from tools import keyboard_listener
+
+    tmp = tempfile.mkdtemp(prefix="vqsting-pid-")
+    pid_path = os.path.join(tmp, "listener.pid")
+    original = keyboard_listener.PID
+    keyboard_listener.PID = pid_path
+    try:
+        with open(pid_path, "w") as f:
+            f.write(str(os.getpid()))
+        keyboard_listener._cleanup()
+        check("listener: cleanup removes its own pid file",
+              not os.path.exists(pid_path))
+
+        with open(pid_path, "w") as f:
+            f.write("424242")
+        keyboard_listener._cleanup()
+        check("listener: cleanup keeps a pid file of another process",
+              os.path.exists(pid_path))
+        os.unlink(pid_path)
+
+        keyboard_listener._cleanup()
+        check("listener: cleanup without a pid file is safe", True)
+    finally:
+        keyboard_listener.PID = original
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def make_app():
     db_source = os.path.join(BASE_DIR, "instance", "database.db")
     tmp_db = os.path.join(tempfile.mkdtemp(prefix="vqsting-"), "database.db")
@@ -135,6 +165,7 @@ def main():
           sys.platform)
 
     keyboards_checks()
+    listener_lifecycle_checks()
     if not IS_WINDOWS:
         listener_checks()
 
