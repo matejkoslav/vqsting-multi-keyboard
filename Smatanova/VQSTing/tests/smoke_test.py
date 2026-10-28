@@ -179,7 +179,15 @@ def make_app():
         shutil.copyfile(db_source, tmp_db)
     # Absolute path: sqlite:////tmp/... on POSIX, sqlite:///C:/... on Windows.
     website.DB_NAME = tmp_db.replace(os.sep, "/")
-    return create_app()
+    app = create_app()
+    # The copy may come from a working tree that has a real group run in it;
+    # start every test run from a clean group state.
+    with app.app_context():
+        GroupVote.query.delete()
+        Tester.query.delete()
+        GroupRun.query.delete()
+        website.db.session.commit()
+    return app
 
 
 class FakeListener:
@@ -481,6 +489,36 @@ def group_checks():
             after = GroupVote.query.filter_by(id_group_run=run.id).count()
         check("group: a second start clears the votes of the first run",
               before == 2 and after == 0, f"{before} -> {after}")
+
+        # a tester who misses a round must not inherit the previous round's vote
+        client.post("/group/1/reset")
+        client.post("/group/1/add", json={})
+        client.post("/group/1/add", json={})
+        client.post("/group/1/tester", json={"seat": 1, "age": 23})
+        client.post("/group/1/tester", json={"seat": 2, "age": 31})
+        for seat, keyboard in ((1, "linux:kbd1"), (2, "linux:kbd2")):
+            client.post("/group/1/pair", json={"seat": seat})
+            listener.press(keyboard, "Enter")
+            client.get("/group/1/state")
+        with patch("website.group.play_videos"):
+            client.post("/group/1/start")
+            client.get("/group/1/play")
+        listener.press("linux:kbd1", "4")
+        listener.press("linux:kbd2", "3")
+        client.get("/group/1/state")
+        with patch("website.group.play_videos"):
+            client.post("/group/1/next")
+            client.get("/group/1/play")
+        client.post("/group/1/vote", json={"seat": 1, "value": 5})
+        with app.app_context():
+            run = GroupRun.query.filter_by(id_session=1).first()
+            run.round_started = time.time() - 30    # let the round time out
+            website.db.session.commit()
+        state = client.get("/group/1/state").get_json()
+        check("group: a missed round does not reuse the previous vote",
+              [t["vote"] for t in state["testers"]] == [5, None]
+              and state["park"]["round_open"] is False,
+              str(state["testers"]))
         client.post("/group/1/reset")
     finally:
         os.chdir(original_cwd)
