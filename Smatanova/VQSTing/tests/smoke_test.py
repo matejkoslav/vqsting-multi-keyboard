@@ -11,6 +11,7 @@ temporary file, so the real instance/database.db is not modified.
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -126,6 +127,14 @@ def listener_checks():
           str(names))
 
 
+def windows_listener_checks():
+    script = os.path.join(BASE_DIR, "tools", "windows_keyboard_listener.py")
+    result = subprocess.run([sys.executable, script, "--selftest"],
+                            capture_output=True, text=True)
+    check("windows listener: --selftest exits 0", result.returncode == 0,
+          (result.stdout + result.stderr).strip())
+
+
 def make_app():
     db_source = os.path.join(BASE_DIR, "instance", "database.db")
     tmp_db = os.path.join(tempfile.mkdtemp(prefix="vqsting-"), "database.db")
@@ -143,6 +152,7 @@ def main():
     keyboards_checks()
     if not IS_WINDOWS:
         listener_checks()
+    windows_listener_checks()
 
     # --- platform helpers -------------------------------------------------
     expected = "video" + os.sep + "ExampleTest" + os.sep + "test_seq"
