@@ -259,3 +259,17 @@ Video v riadku, testér v stĺpci, `n/a` = nedostal hlas.
 - PS/2 klávesnice na Windows nemajú použiteľnú inštančnú cestu.
 - Windows: Raw Input overený len manuálne na reálnom HW (CI runner nemá 2 klávesnice).
 - Beží len lokálne (localhost), žiadna autentifikácia testérov.
+
+## 11. Čo sme vedome neriešili (a prečo)
+
+Zoznam prišiel z `fix.md` (Matejov zápisník, 28.10.2026). Po dohode
+s Matejom sme z neho spravili len životný cyklus pid súboru (vetva
+`fix/listener-pid`), zvyšok je odložený:
+
+| Nápad | Verdikt | Dôvod |
+|---|---|---|
+| zbaviť sa `pkexec` cez `usermod -aG input` | **nie** | trvalé právo čítať všetky vstupné zariadenia (keylogger); súčasné riešenie s dočasnými fd je bezpečnejšie a je to dobrý argument do elaborátu |
+| `vqsting start/stop/status/restart` CLI | **nie** | scope creep; namiesto toho je `run.bat`/`stop.bat` pre Windows a `run.sh`/`stop.sh` pre Linux |
+| `/health` endpoint | **nie** | `/keyboards/state` už vracia `listener`, `age`, `seq` |
+| systemd user unit | **nie** | appka je demo na jednom PC, spúšťa sa ručne |
+| udev ACL namiesto root openera | **možno neskôr** | ekvivalent bezpečnosti, viac systémovej konfigurácie |
