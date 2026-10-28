@@ -445,12 +445,9 @@ def state(id_session):
 
     tester_rows = []
     for tester in testers:
-        if open_round:
-            vote = current_votes.get(tester.id)
-        else:
-            last = GroupVote.query.filter_by(id_tester=tester.id) \
-                .order_by(GroupVote.id.desc()).first()
-            vote = last.value if last is not None else None
+        # only this round counts: a tester who missed it shows nothing, not the
+        # value from some earlier video
+        vote = current_votes.get(tester.id)
         tester_rows.append({
             "seat": tester.seat,
             "keyboard_id": tester.keyboard_id,
