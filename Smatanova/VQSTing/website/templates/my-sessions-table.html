@@ -14,7 +14,6 @@
 
     <h2 class="mt-4" {% if session.ok == False %} style="color: red;" {%endif%}>
         {{session.name}}
-        <span style="font-size: 1.2rem;">( {{get_all_participants(session.id)}} ) </span>
     </h2>
     <div class="info_session">
         <span>Method: {{(session.test_method).upper()}}</span>
@@ -37,13 +36,16 @@
     </div>
     {% else %}
     <div class="session_buttons">
+        <a href="{{url_for('group.setup', id_session=session.id)}}">
+            <button type="button" class="btn btn-success">Group test</button>
+        </a>
         <a href="{{url_for('views.details', id=session.id)}}">
             <button type="button" class="btn btn-primary">Details</button>
         </a>
         <a href="{{url_for('views.statistics', id=session.id)}}">
             <button type="button" class="btn btn-primary">Statistics</button>
         </a>
-        <a href="{{url_for('video.export', id=session.id)}}">
+        <a href="{{url_for('group.export', id_session=session.id)}}">
             <button type="button" class="btn btn-primary">Export</button>
         </a>
         <a href="{{url_for('admin.delete_session', id=session.id)}}">
