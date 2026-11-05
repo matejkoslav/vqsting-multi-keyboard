@@ -22,6 +22,7 @@ group = Blueprint('group', __name__)
 
 ROUND_SECONDS = 9
 MAX_TESTERS = 4
+MAX_ORDER_SHUFFLES = 1000   # bound for generate_order; see the comment there
 
 ACR_SCALE = ["EXCELLENT", "GOOD", "FAIR", "POOR", "BAD"]
 DCR_SCALE = ["IMPERCEPTIBLE", "PERCEPTIBLE BUT NOT ANNOYING",
@@ -219,8 +220,13 @@ def generate_order(session):
         return []
 
     again = True
+    # Fewer than three videos, or videos that all come from one sequence, can
+    # never satisfy the "no three in a row" rule below.  Bound the retries so
+    # Start always returns an order instead of spinning forever.
+    tries = 0
 
-    while again:
+    while again and tries < MAX_ORDER_SHUFFLES:
+        tries += 1
         random.shuffle(sequences_order)
 
         for i in range(len(sequences_order) - 2):
