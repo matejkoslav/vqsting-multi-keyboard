@@ -125,9 +125,10 @@
         const payload = {seat: seat};
         // Digits typed on the tester's keyboard wait in `typing` for the next
         // poll that copies them into the input; read them first so a fast
-        // "23" + Enter inside one poll is not lost.
-        const inProgress = seat in typing && typing[seat] !== null;
-        const age = (inProgress ? typing[seat] : (ageBox(seat).value || '')).trim();
+        // "23" + Enter inside one poll is not lost.  An empty buffer must fall
+        // back to the input, otherwise one Backspace would block the mouse path.
+        const typed = typing[seat];
+        const age = (typed ? typed : (ageBox(seat).value || '')).trim();
         if (age) payload.age = age;
         if (seat in glasses) payload.glasses = glasses[seat];
         if (!age && !(seat in glasses)) return;
