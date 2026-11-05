@@ -1,6 +1,6 @@
 # Progress — living list
 
-Aktualizované: 28.10.2026 · `main` = `71bc32d` · group mode aj Windows listener zmergované
+Aktualizované: 5.11.2026 · group mode aj Windows listener zmergované
 
 ## ✅ Hotové (28.10.2026): group mode — N testérov na jednom PC
 - [x] účastnícke účty zrušené: testér = stĺpec v behu testu, nie `User`
