@@ -63,11 +63,9 @@
         refresh();
     }
 
-    function currentAgeText(seat, tester) {
+    function typedAge(seat) {
         const typed = typing[seat];
-        if (typed !== undefined && typed !== null) return typed;
-        const known = (tester || {}).age;
-        return known === null || known === undefined ? '' : String(known);
+        return typed === undefined || typed === null ? '' : typed;
     }
 
     function ageBox(seat) {
@@ -125,7 +123,11 @@
 
     async function save(seat, keepStage) {
         const payload = {seat: seat};
-        const age = (ageBox(seat).value || '').trim();
+        // Digits typed on the tester's keyboard wait in `typing` for the next
+        // poll that copies them into the input; read them first so a fast
+        // "23" + Enter inside one poll is not lost.
+        const inProgress = seat in typing && typing[seat] !== null;
+        const age = (inProgress ? typing[seat] : (ageBox(seat).value || '')).trim();
         if (age) payload.age = age;
         if (seat in glasses) payload.glasses = glasses[seat];
         if (!age && !(seat in glasses)) return;
@@ -220,10 +222,10 @@
 
             if (/^[0-9]$/.test(event.key)) {
                 stage[seat] = 'age';
-                typing[seat] = (currentAgeText(seat, tester) + event.key).slice(0, 3);
+                typing[seat] = (typedAge(seat) + event.key).slice(0, 3);
             } else if (event.key === 'Backspace') {
                 stage[seat] = 'age';
-                typing[seat] = currentAgeText(seat, tester).slice(0, -1);
+                typing[seat] = typedAge(seat).slice(0, -1);
             } else if (event.key === 'Enter') {
                 stage[seat] = 'glasses';
                 save(seat, true);
