@@ -2,6 +2,7 @@ from flask import Flask, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, current_user
 from functools import wraps
+import logging
 
 db = SQLAlchemy()
 DB_NAME = "database.db"
@@ -18,8 +19,32 @@ def role_required(role):
     return decorator
 
 
+class _QuietPolling(logging.Filter):
+    """Hide the many "GET /group/<id>/state" lines; printing them to the Windows
+    console slows the app down while testers type."""
+
+    def filter(self, record):
+        message = record.getMessage()
+        return '/state' not in message
+
+
+def _upgrade_schema():
+    """Add columns that create_all() cannot add to an existing database."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    if 'tester' not in inspector.get_table_names():
+        return
+    columns = {column['name'] for column in inspector.get_columns('tester')}
+    if 'name' not in columns:
+        with db.engine.begin() as connection:
+            connection.execute(text('ALTER TABLE tester ADD COLUMN name VARCHAR(100)'))
+
+
 def create_app():
     app = Flask(__name__)  # inicialize Flask
+    werkzeug_log = logging.getLogger('werkzeug')
+    if not any(isinstance(item, _QuietPolling) for item in werkzeug_log.filters):
+        werkzeug_log.addFilter(_QuietPolling())
     app.config['SECRET_KEY'] = 'fsYdgSF*GG5fd'
     app.config['SESSION_TYPE'] = 'filesystem'
 
@@ -42,6 +67,7 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        _upgrade_schema()
 
     login_manager = LoginManager()
     login_manager.login_view = 'auth.login'

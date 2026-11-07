@@ -24,7 +24,10 @@
             <tr>
                 <th></th>
                 {% for tester in testers %}
-                <th class="text-center">Tester {{ tester.seat }}</th>
+                <th class="text-center">
+                    {{ tester.name or ('Tester ' ~ tester.seat) }}
+                    {% if tester.name %}<div class="small text-muted fw-normal">Tester {{ tester.seat }}</div>{% endif %}
+                </th>
                 {% endfor %}
             </tr>
             <tr>
@@ -64,7 +67,7 @@
     {% endif %}
 
     <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
-        <a class="btn btn-primary" href="{{ url_for('group.export', id_session=session.id) }}">Export CSV</a>
+        <a class="btn btn-primary" href="{{ url_for('group.export', id_session=session.id) }}">Export CSV + Excel</a>
         <form method="POST" action="{{ url_for('group.reset', id_session=session.id) }}"
               onsubmit="return confirm('Reset the group run and delete all votes?');">
             <button type="submit" class="btn btn-outline-danger">Reset</button>

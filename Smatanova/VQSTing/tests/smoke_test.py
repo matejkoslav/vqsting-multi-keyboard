@@ -345,20 +345,46 @@ def group_checks():
         check("group: demographics are stored",
               [(t["age"], t["glasses"]) for t in state["testers"]] == [(23, True), (31, False)],
               str(state["testers"]))
+
+        with patch("website.group.play_videos"):
+            response = client.post("/group/1/start")
+        check("group: start needs every tester's name",
+              response.status_code == 302
+              and response.headers.get("Location", "").rstrip("/").endswith("/group/1"),
+              response.headers.get("Location", ""))
+
+        client.post("/group/1/tester", json={"seat": 1, "name": "  Ján   Nový "})
+        client.post("/group/1/tester", json={"seat": 2, "name": "Eva Malá"})
+        state = client.get("/group/1/state?since=0").get_json()
+        check("group: names are stored and tidied",
+              [t["name"] for t in state["testers"]] == ["Ján Nový", "Eva Malá"]
+              and [t["age"] for t in state["testers"]] == [23, 31],
+              str(state["testers"]))
         check("group: state follows the JSON contract",
               set(state) == {"phase", "listener", "park", "scale", "testers",
                              "events", "pairing_seat"}
               and set(state["park"]) == {"id", "current", "total", "seconds_left",
                                          "round_open"}
               and set(state["scale"]) == {"method", "labels"}
-              and set(state["testers"][0]) == {"seat", "keyboard_id", "keyboard_name",
-                                               "age", "glasses", "gender", "vote",
-                                               "last_seq"}
+              and set(state["testers"][0]) == {"id", "seat", "keyboard_id", "keyboard_name",
+                                               "name", "age", "glasses", "gender",
+                                               "vote", "last_seq"}
               and state["scale"]["labels"] == ["IMPERCEPTIBLE",
                                                "PERCEPTIBLE BUT NOT ANNOYING",
                                                "SLIGHTLY ANNOYING", "ANNOYING",
                                                "VERY ANNOYING"],
               str(state))
+
+        # a missing video must not leave the run stuck in "running"
+        missing = os.path.join(video_root, "video", "grey50.mp4")
+        os.rename(missing, missing + ".bak")
+        with patch("website.group.play_videos") as player:
+            response = client.post("/group/1/start")
+        os.rename(missing + ".bak", missing)
+        state = client.get("/group/1/state?since=0").get_json()
+        check("group: start with a missing video stays in setup",
+              response.status_code == 302 and state["phase"] == "setup"
+              and player.call_count == 0, state["phase"])
 
         with patch("website.group.play_videos") as player:
             response = client.post("/group/1/start")
@@ -437,7 +463,8 @@ def group_checks():
         response = client.get("/group/1/results")
         check("group: results page is 200", response.status_code == 200)
         check("group: results show testers and unfinished rounds",
-              b"Tester 1" in response.data and b"Tester 2" in response.data
+              "Ján Nový" in response.get_data(as_text=True)
+              and "Eva Malá" in response.get_data(as_text=True)
               and b"n/a" in response.data)
 
         with patch("website.group.open_folder") as folder:
@@ -450,23 +477,41 @@ def group_checks():
         csv_path = os.path.join(video_root, "csv", "ExampleTest.csv")
         check("group: export writes csv/<session>.csv", os.path.isfile(csv_path), csv_path)
         if os.path.isfile(csv_path):
-            with open(csv_path, newline="") as handle:
-                rows = list(csv.reader(handle))
-            check("group: csv keeps the legacy header",
-                  rows[0] == ["ExampleTest"]
-                  and rows[1] == ["dcr", "Samsung U24E590D UHD"]
-                  and rows[2] == [], str(rows[:3]))
-            check("group: csv has testers as columns",
-                  rows[3] == ["", "Tester 1", "Tester 2"]
-                  and rows[4] == ["", "23", "31"]
-                  and rows[5] == ["", "ano", "nie"], str(rows[3:6]))
-            data_rows = rows[6:]
+            with open(csv_path, newline="", encoding="utf-8-sig") as handle:
+                rows = list(csv.reader(handle, delimiter=";"))
+            check("group: csv has an info block",
+                  rows[0] == ["Session", "ExampleTest"] and rows[1] == ["Method", "DCR"]
+                  and rows[2] == ["Display", "Samsung U24E590D UHD"]
+                  and rows[3][0] == "Exported" and rows[4] == [], str(rows[:5]))
+            check("group: csv has testers as columns with their names",
+                  rows[5] == ["Tester", "Tester 1", "Tester 2"]
+                  and rows[6] == ["Name", "Ján Nový", "Eva Malá"]
+                  and rows[7] == ["Age", "23", "31"]
+                  and rows[8] == ["Glasses", "ano", "nie"]
+                  and rows[10] == ["Video", "Ján Nový", "Eva Malá"], str(rows[5:11]))
+            data_rows = rows[11:]
             numeric = [cell for row in data_rows for cell in row[1:] if cell != "n/a"]
             check("group: csv has one row per tested video", len(data_rows) == 12,
                   str(len(data_rows)))
             check("group: csv uses n/a for rounds without a vote",
                   len(numeric) == 6 and all(cell in {"1", "2", "3", "4", "5"}
                                             for cell in numeric), str(numeric))
+
+        xlsx_path = os.path.join(video_root, "csv", "ExampleTest.xlsx")
+        try:
+            import openpyxl
+        except ImportError:
+            openpyxl = None
+        if openpyxl is not None:
+            check("group: export writes csv/<session>.xlsx", os.path.isfile(xlsx_path), xlsx_path)
+            if os.path.isfile(xlsx_path):
+                sheet = openpyxl.load_workbook(xlsx_path).active
+                values = [[cell for cell in row] for row in sheet.iter_rows(values_only=True)]
+                flat = [cell for row in values for cell in row if cell is not None]
+                check("group: xlsx has the names and every vote",
+                      "Ján Nový" in flat and "Eva Malá" in flat
+                      and sum(1 for row in values if row[0] and str(row[0]).endswith(".mp4")) == 12,
+                      str(values[:12]))
 
         response = client.get("/keyboards")
         check("GET /keyboards is 200", response.status_code == 200)
@@ -497,6 +542,26 @@ def group_checks():
         check("group: a fifth tester is refused", response.status_code == 400,
               str(response.status_code))
 
+        client.post("/group/1/tester", json={"seat": 3, "name": "Third", "age": 40})
+        client.post("/group/1/tester", json={"seat": 4, "name": "Fourth", "age": 50})
+        response = client.post("/group/1/remove", json={"seat": 2})
+        state = client.get("/group/1/state?since=0").get_json()
+        check("group: remove deletes one tester and renumbers the rest",
+              response.status_code == 200
+              and [t["seat"] for t in state["testers"]] == [1, 2, 3]
+              and [t["name"] for t in state["testers"]] == [None, "Third", "Fourth"]
+              and [t["age"] for t in state["testers"]] == [None, 40, 50],
+              str(state["testers"]))
+        response = client.post("/group/1/add", json={})
+        check("group: the removed seat is free again",
+              response.status_code == 200 and response.get_json()["seat"] == 4,
+              response.get_data(as_text=True))
+        response = client.post("/group/1/remove", json={"seat": 9})
+        check("group: removing an empty seat is refused", response.status_code == 404,
+              str(response.status_code))
+        for seat in (4, 3, 2):
+            client.post("/group/1/remove", json={"seat": seat})
+
         listener.press("linux:kbd3", "Enter")   # pressed before pairing is armed
         client.post("/group/1/pair", json={"seat": 1})
         state = client.get("/group/1/state").get_json()
@@ -519,8 +584,8 @@ def group_checks():
         client.post("/group/1/reset")
         client.post("/group/1/add", json={})
         client.post("/group/1/add", json={})
-        client.post("/group/1/tester", json={"seat": 1, "age": 23})
-        client.post("/group/1/tester", json={"seat": 2, "age": 31})
+        client.post("/group/1/tester", json={"seat": 1, "name": "Jan", "age": 23})
+        client.post("/group/1/tester", json={"seat": 2, "name": "Eva", "age": 31})
         for seat, keyboard in ((1, "linux:kbd1"), (2, "linux:kbd2")):
             client.post("/group/1/pair", json={"seat": seat})
             listener.press(keyboard, "Enter")
@@ -528,6 +593,9 @@ def group_checks():
         with patch("website.group.play_videos"):
             client.post("/group/1/start")
             client.get("/group/1/play")
+        response = client.post("/group/1/remove", json={"seat": 2})
+        check("group: testers cannot be removed during a running test",
+              response.status_code == 409, str(response.status_code))
         listener.press("linux:kbd1", "4")
         listener.press("linux:kbd2", "2")
         client.get("/group/1/state")
@@ -546,8 +614,8 @@ def group_checks():
         client.post("/group/1/reset")
         client.post("/group/1/add", json={})
         client.post("/group/1/add", json={})
-        client.post("/group/1/tester", json={"seat": 1, "age": 23})
-        client.post("/group/1/tester", json={"seat": 2, "age": 31})
+        client.post("/group/1/tester", json={"seat": 1, "name": "Jan", "age": 23})
+        client.post("/group/1/tester", json={"seat": 2, "name": "Eva", "age": 31})
         for seat, keyboard in ((1, "linux:kbd1"), (2, "linux:kbd2")):
             client.post("/group/1/pair", json={"seat": seat})
             listener.press(keyboard, "Enter")

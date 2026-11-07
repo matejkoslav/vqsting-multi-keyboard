@@ -295,3 +295,25 @@ správnym stĺpcom. `--selftest` beží v CI na Ubuntu aj Windows.
 Stále platí: CI runner nemá dve klávesnice, takže rozlíšenie zariadení sa nedá
 overiť automaticky — pri akejkoľvek zmene v listeneri treba manuálny test podľa
 `docs/for-humans/windows-test.md`.
+
+## 10. Zmeny 07.11.2026 (`feature/tester-names-export`)
+
+Tento dokument opisuje pôvodný návrh. Oproti nemu platí:
+
+- `Tester.name` — `str(100) | NULL`, meno a priezvisko. `create_app()` ho do starej DB
+  doplní cez `_upgrade_schema()` (`ALTER TABLE`).
+- `POST /tester` prijíma aj `name` (orezané, viac medzier → jedna) a vracia
+  `{ok, seat, name, age, glasses}`.
+- `POST /group/<id>/remove` `{seat}` — zmaže testéra a jeho hlasy, ostatných prečísluje
+  1..N, upraví `pairing_seat`. `409` počas `running`, `404` pre prázdne miesto.
+- `POST /start` vyžaduje `name` aj `age` všetkých testérov a pred `phase=running`
+  overí cez `_round_paths()` všetky video súbory (inak flash + ostáva `setup`).
+- `GET /state` → každý testér má navyše `"id"` a `"name"`.
+- Frontend setup: stav (rozpísaný text, aktívne pole) je kľúčovaný `tester.id`;
+  pevné poradie `name → age → glasses → done`; natívne `keydown` sa na stránke
+  `preventDefault`-uje okrem políčka, ktoré operátor práve upravuje cez ✎;
+  počas úpravy sa eventy listenera ignorujú. Polling 100 ms (setup), 200 ms (vote),
+  s ochranou proti prekrývaniu.
+- `werkzeug` log filtruje riadky s `/state`.
+- Export: `website/export.py` — `build_table()` → `write_csv()` (`;`, `utf-8-sig`,
+  info blok, mená) a `write_xlsx()` (openpyxl, farby appky, legenda). Oba v `csv/`.

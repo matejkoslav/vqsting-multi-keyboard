@@ -47,6 +47,11 @@ Potom podľa systému:
 
 Otvor <http://127.0.0.1:5000>.
 
+> **Po každom `git pull` alebo prepnutí vetvy spusti znova `pip install -r requirements.txt`.**
+> Napríklad Excel export potrebuje knižnicu `openpyxl`, ktorá pribudla 07.11.2026.
+> Pri prvom spustení novej verzie si appka sama doplní chýbajúce stĺpce v `database.db`
+> (napr. meno testéra), takže nič netreba mazať.
+
 - Prvé spustenie je pomalé (inštalujú sa knižnice).
 - Terminál musí bežať celý čas.
 
@@ -61,11 +66,29 @@ Toto v repe nie je → skopíruj od Mateja na tie isté cesty.
 1. <http://127.0.0.1:5000> → login **`admin` / `admin`**.
 2. `My test sessions` → `ExampleTest` → `Details / Export`.
 3. **Skupinový test:** v tom istom riadku klikni **Group test**.
-   Pridaj 1–4 testérov, spáruj klávesnice (testér stlačí ľubovoľnú klávesu),
-   testéri vyplnia vek a okuliare na svojej klávesnici, potom **Start**.
+   Pridaj 1–4 testérov (**Add tester**) a spáruj klávesnice (**Pair keyboard** → testér stlačí
+   ľubovoľnú klávesu). Každý testér potom na svojej klávesnici vyplní v pevnom poradí
+   **meno → `Enter` → vek → `Enter` → okuliare `1`/`2`**. Potom **Start**.
+   - **✎** pri políčku: operátor opraví meno alebo vek na svojej klávesnici (aj s diakritikou).
+   - **✕ Remove**: odstráni testéra, ostatní sa prečíslujú a nič nestratia.
+4. Po teste na stránke výsledkov **Export CSV + Excel** → v priečinku `csv/` vznikne
+   `<session>.xlsx` (naformátovaný) a `<session>.csv` (oddeľovač `;`).
 
-Účastnícke účty už neexistujú — testér nemá meno ani heslo, identitou je jeho
-klávesnica. Celý postup: **[docs/for-humans/group-mode.md](docs/for-humans/group-mode.md)**.
+Účastnícke účty neexistujú — testér nemá účet ani heslo, identitou je jeho klávesnica,
+meno sa zadá len do testu. Celý postup: **[docs/for-humans/group-mode.md](docs/for-humans/group-mode.md)**.
+
+### Ako vyskúšať cudziu vetvu (napr. pred schválením Pull Requestu)
+
+```bash
+cd vqsting-multi-keyboard
+git fetch                                   # stiahne nové vetvy z GitHubu
+git checkout feature/tester-names-export    # prepne sa na vetvu
+cd Smatanova/VQSTing
+pip install -r requirements.txt             # doinštaluje nové knižnice
+python tests/smoke_test.py                  # má skončiť "All checks passed."
+```
+
+Potom spusti appku (`run.bat` / `./run.sh`). Späť na stabilnú verziu: `git checkout main`.
 
 ## 5. Ako prispieť kódom (push)
 

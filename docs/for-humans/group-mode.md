@@ -28,19 +28,32 @@
    klávesnice (`AT Translated Set 2 keyboard`, …) a prestane čakať.
    Párovanie je odporúčané, nie povinné — testér bez klávesnice môže hlasovať
    myšou (krok 6).
-5. **Vek a okuliare na klávesnici testéra:**
-   - testér napíše vek číslicami na svojej klávesnici (`2` `3`), `Backspace`
-     maže, `Enter` potvrdí;
-   - potom `1` = nosí okuliare, `2` = nenosí.
-   V stĺpci vidíš, čo práve píše. Keď sa pomýli, zopakuj vek odznova.
-6. **Fallback myšou (admin):** v každom stĺpci je aj obyčajný input *Age*
-   a select *Glasses*. Vyplň ich myšou a klikni **Save**. Toto použi vždy,
-   keď klávesnica nefunguje alebo keď testér nechce písať.
+5. **Meno, vek a okuliare na klávesnici testéra:** polia idú v pevnom poradí
+   a aktívne pole je zvýraznené modrým rámom:
+   - meno a priezvisko písmenami (`Space` = medzera), potom `Enter`.
+     Klávesnica testéra posiela len A–Z bez diakritiky a appka meno sama
+     upraví na tvar „Jan Novak“;
+   - vek číslicami, potom `Enter`;
+   - okuliare: `1` = nosí, `2` = nenosí.
+   `Backspace` maže v aktívnom poli. Klávesy idú **len** do aktívneho poľa, takže
+   číslice sa nikdy nedostanú do mena a 1/2 pri okuliaroch nezmenia vek. Keď je
+   všetko uložené, ďalšie klávesy sa ignorujú a opravu urobí operátor cez ✎.
+   Políčka sú zamknuté. Windows posiela stlačenia zo všetkých klávesníc aj do
+   políčka, na ktoré niekto klikol, a preto sa kedysi vek jedného testéra
+   zapisoval aj do políčka iného testéra.
+6. **Úprava operátorom:** tlačidlo ✎ pri políčku ho odomkne a operátor môže na
+   svojej klávesnici opraviť meno (aj s diakritikou) alebo vek. `Enter` uloží,
+   `Esc` zruší. Kým operátor upravuje, klávesnice testérov sú pozastavené, takže
+   sa nič nezapíše inam. Okuliare sa dajú kliknúť aj myšou (*Yes/No*).
+   **✕ Remove** odstráni testéra. Ostatní si nechajú svoje údaje aj rozpísaný
+   text a len sa prečíslujú. Uvoľnené miesto sa dá znova obsadiť cez
+   **Add tester**. Počas bežiaceho testu sa odstrániť nedá.
 7. **Tréning (nepovinné):** tlačidlo **Training** prehrá tréningový playlist
    raz pre všetkých, bez kontroly intervalu. Po dohraní si testéri môžu
    sadnúť a ide sa na ostro.
-8. **Start** je aktívny, keď má každý testér vyplnený vek. Skontroluje aj to,
-   že session má videá. Appka vygeneruje spoločné poradie videí a prehrá prvé.
+8. **Start** je aktívny, keď má každý testér vyplnené meno a vek. Pred spustením
+   skontroluje, či sú v priečinku `video` všetky súbory session. Ak niečo chýba,
+   ostane na setup stránke s chybovou hláškou a test sa nezasekne v stave „running“. Appka vygeneruje spoločné poradie videí a prehrá prvé.
 9. **Hlasovanie:** po každom videu sa zobrazí obrazovka s N stĺpcami vedľa
    seba a školou 5→1 (rovnaké texty ako v klasickom teste).
    - každý testér stlačí `1`–`5` na svojej klávesnici — jeho stĺpec sa označí
@@ -58,26 +71,36 @@ Tabuľka na Results má riadky videá, stĺpce testérov, v hlavičke vek
 a okuliare. `n/a` znamená, že testér v tom kole nehlasoval (kolo sa zavrelo
 po 9 s bez neho).
 
-Tlačidlo **Export CSV** zapíše `csv/<nazov_session>.csv` (podčiarkniky namiesto
-medzier) a otvorí priečinok. Tvar súboru je rovnaký ako pri starom režime:
+Tlačidlo **Export CSV + Excel** zapíše do priečinka `csv/` dva súbory
+(podčiarkniky namiesto medzier) a otvorí priečinok:
+
+- `<nazov_session>.xlsx`: naformátovaná tabuľka vo farbách appky. Obsahuje
+  hlavičku s menami testérov, vek a okuliare, farebne odlíšené hodnotenia
+  (5 = zelená … 1 = červená) a legendu stupnice.
+- `<nazov_session>.csv`: rovnaké údaje na ďalšie spracovanie (Excel, MATLAB).
+  Oddeľovač je `;`, aby sa v slovenskom Exceli každá hodnota zobrazila vo
+  vlastnom stĺpci. Kódovanie je UTF-8 s BOM, aby sa správne zobrazila diakritika.
 
 ```csv
-ExampleTest
-dcr,Samsung U24E590D UHD
+Session;ExampleTest
+Method;DCR
+Display;Samsung U24E590D UHD
+Exported;07.11.2026 19:31
 
-,Tester 1,Tester 2,Tester 3
-,23,31,22
-,ano,nie,ano
-Basketball_H264_1M.mp4,2,2,1
-Beauty_AV1_1M.mp4,4,5,4
+Tester;Tester 1;Tester 2
+Name;Ján Nový;Eva Malá
+Age;23;31
+Glasses;ano;nie
+
+Video;Ján Nový;Eva Malá
+Basketball_H264_1M.mp4;2;n/a
+Beauty_AV1_1M.mp4;4;5
 ```
 
-- prvý riadok = názov session,
-- druhý = metóda a display,
-- tretí prázdny,
-- `,Tester N` = stĺpce testérov, pod nimi vek (`n/a` ak chýba) a okuliare
-  (`ano` / `nie`),
-- ďalej jeden riadok na video, hodnoty 1–5 alebo `n/a`.
+Hodnoty sú 1–5, alebo `n/a`, ak testér v danom kole nehlasoval. Ak je súbor
+otvorený v Exceli, export naň nevie zapisovať a appka ťa upozorní, aby si ho
+zavrel. Na Excel export treba knižnicu `openpyxl`, ktorú nainštaluje
+`pip install -r requirements.txt`.
 
 **Reset** (na setup aj results stránke) zmaže testérov, hlasy aj poradie
 a vráti run do stavu *setup*; session a videá ostávajú.

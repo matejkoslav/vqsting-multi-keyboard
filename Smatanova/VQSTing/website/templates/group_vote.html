@@ -93,7 +93,7 @@
 
         column.innerHTML = `
             <div class="who">
-                <h2>Tester ${tester.seat}</h2>
+                <h2 data-role="name"></h2>
                 <div class="kb" data-role="keyboard"></div>
                 <div class="demo" data-role="demo"></div>
                 <div class="status waiting" data-role="status">… waiting</div>
@@ -101,7 +101,10 @@
             <div class="opts">${options}</div>`;
 
         column.querySelectorAll('[data-value]').forEach(button => {
-            button.addEventListener('click', () => vote(tester.seat, Number(button.dataset.value)));
+            button.addEventListener('click', () => {
+                button.blur();
+                vote(tester.seat, Number(button.dataset.value));
+            });
         });
 
         document.getElementById('columns').append(column);
@@ -128,7 +131,9 @@
 
         for (const tester of data.testers) {
             const column = ensureColumn(tester, labels);
-            column.querySelector('[data-role="keyboard"]').textContent = tester.keyboard_name || 'no keyboard';
+            column.querySelector('[data-role="name"]').textContent = tester.name || `Tester ${tester.seat}`;
+            column.querySelector('[data-role="keyboard"]').textContent =
+                (tester.name ? `Tester ${tester.seat} · ` : '') + (tester.keyboard_name || 'no keyboard');
 
             const demographic = [];
             if (tester.age !== null) demographic.push(`${tester.age} years`);
@@ -146,11 +151,20 @@
         }
     }
 
+    let busy = false;
     async function refresh() {
-        if (finished) return;
-        const response = await fetch(`${stateUrl}?since=${since}`);
-        if (!response.ok) return;
-        const data = await response.json();
+        if (finished || busy) return;
+        busy = true;
+        let data;
+        try {
+            const response = await fetch(`${stateUrl}?since=${since}`);
+            if (!response.ok) return;
+            data = await response.json();
+        } catch (error) {
+            return;
+        } finally {
+            busy = false;
+        }
 
         for (const event of data.events) {
             if (event.seq > since) since = event.seq;
@@ -177,7 +191,14 @@
         }
     }
 
-    const timer = setInterval(refresh, 500);
+    // Windows also delivers the testers' keys to the page itself. Without this an
+    // Enter or Space from any keyboard would "click" the last clicked vote button.
+    document.addEventListener('keydown', event => {
+        if (event.ctrlKey || event.altKey || event.metaKey || /^F\d+$/.test(event.key)) return;
+        event.preventDefault();
+    });
+
+    const timer = setInterval(refresh, 200);
     refresh();
 </script>
 

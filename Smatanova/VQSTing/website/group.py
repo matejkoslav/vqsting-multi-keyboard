@@ -4,7 +4,6 @@ The tester's physical keyboard is their identity; the listener state is read
 only through ``website.keyboards.state()`` and never from the JSON file.
 """
 
-import csv
 import os
 import random
 import time
@@ -14,6 +13,7 @@ from flask import (Blueprint, flash, jsonify, redirect, render_template,
 from flask_login import current_user, login_required
 
 from . import db, keyboards, role_required
+from . import export as export_files
 from .models import (GroupRun, GroupVote, Sequence, Session, Tester, Training,
                      Video)
 from .platform_compat import open_folder, play_videos, video_path
@@ -113,6 +113,16 @@ def _glasses_label(tester):
     if tester.glasses is None:
         return "n/a"
     return "ano" if tester.glasses else "nie"
+
+
+def _tester_label(tester):
+    """The tester's name, or "Tester N" while no name is entered."""
+    return tester.name or f"Tester {tester.seat}"
+
+
+def _clean_name(value):
+    text = " ".join(str(value or "").split())
+    return text[:100] or None
 
 
 def _payload():
@@ -253,6 +263,26 @@ def generate_order(session):
     return order
 
 
+def _round_paths(session, video):
+    """Files mpv plays for one round, or None if any of them is missing."""
+    folder_name = session.name.replace(" ", "_")
+    folder = "ref_seq" if video.reference else "test_seq"
+    current_path = video_path(folder_name, folder, video.name)
+    if not os.path.exists(current_path):
+        return None
+    if session.test_method != "dcr":
+        return [current_path]
+    reference = Video.query.filter_by(id_sequence=video.id_sequence,
+                                      reference=True).first()
+    grey = video_path("grey50.mp4")
+    if reference is None or not os.path.exists(grey):
+        return None
+    reference_path = video_path(folder_name, "ref_seq", reference.name)
+    if not os.path.exists(reference_path):
+        return None
+    return [reference_path, grey, current_path]
+
+
 # ---------- setup ---------------------------------------------------------
 
 @group.route('/<int:id_session>')
@@ -281,6 +311,8 @@ def save_tester(id_session):
         return jsonify({"error": f"seat must be 1..{MAX_TESTERS}"}), 400
 
     tester = _ensure_tester(run, seat)
+    if "name" in data:
+        tester.name = _clean_name(data.get("name"))
     if "age" in data:
         tester.age = _parse_int(data.get("age"))
     if "glasses" in data:
@@ -289,8 +321,8 @@ def save_tester(id_session):
         gender = (data.get("gender") or "").strip().lower()
         tester.gender = gender[:1] or None
     db.session.commit()
-    return jsonify({"ok": True, "seat": seat, "age": tester.age,
-                    "glasses": tester.glasses})
+    return jsonify({"ok": True, "seat": seat, "name": tester.name,
+                    "age": tester.age, "glasses": tester.glasses})
 
 
 @group.route('/<int:id_session>/pair', methods=['POST'])
@@ -329,6 +361,41 @@ def add_tester(id_session):
     return jsonify({"ok": True, "seat": seat})
 
 
+@group.route('/<int:id_session>/remove', methods=['POST'])
+@login_required
+@role_required(10)
+def remove_tester(id_session):
+    """Delete one tester and renumber the rest to 1..N, so the free seats are
+    always at the end and a new tester gets the next number."""
+    session = _owned_session(id_session)
+    if session is None:
+        return jsonify({"error": "forbidden"}), 403
+    run = _run_for(session)
+    if run.phase == "running":
+        return jsonify({"error": "testers cannot be removed during a test"}), 409
+    seat = _parse_int(_payload().get("seat"))
+    tester = _tester(run, seat) if seat is not None else None
+    if tester is None:
+        return jsonify({"error": "no tester on this seat"}), 404
+
+    GroupVote.query.filter_by(id_tester=tester.id).delete()
+    db.session.delete(tester)
+    db.session.flush()
+
+    if run.pairing_seat == seat:
+        run.pairing_seat = None
+    renumbered = {}
+    for number, other in enumerate(_testers(run), start=1):
+        if other.seat != number:
+            renumbered[other.seat] = number
+            other.seat = number
+    if run.pairing_seat in renumbered:
+        run.pairing_seat = renumbered[run.pairing_seat]
+    db.session.commit()
+    return jsonify({"ok": True, "removed": seat, "renumbered": renumbered,
+                    "count": len(_testers(run))})
+
+
 @group.route('/<int:id_session>/start', methods=['POST'])
 @login_required
 @role_required(10)
@@ -341,6 +408,10 @@ def start(id_session):
     if not testers:
         flash('Add at least one tester before starting.', category='error')
         return redirect(url_for('group.setup', id_session=session.id))
+    missing = [str(tester.seat) for tester in testers if not tester.name]
+    if missing:
+        flash('Tester ' + ', '.join(missing) + ' has no name.', category='error')
+        return redirect(url_for('group.setup', id_session=session.id))
     missing = [str(tester.seat) for tester in testers if tester.age is None]
     if missing:
         flash('Tester ' + ', '.join(missing) + ' has no age.', category='error')
@@ -350,6 +421,15 @@ def start(id_session):
     if not order:
         flash('This session has no videos to test.', category='error')
         return redirect(url_for('group.setup', id_session=session.id))
+    # Check every file before the run switches to "running"; otherwise a missing
+    # video left the run stuck in "running" and testers could not be edited.
+    for video_id in order:
+        video = Video.query.filter_by(id=video_id).first()
+        if video is None or _round_paths(session, video) is None:
+            flash('Some videos of this session are missing in the video folder '
+                  '(or grey50.mp4 is missing). Copy them there and press Start again.',
+                  category='error')
+            return redirect(url_for('group.setup', id_session=session.id))
 
     # a second run must not inherit the votes of the previous one
     GroupVote.query.filter_by(id_group_run=run.id).delete()
@@ -449,9 +529,11 @@ def state(id_session):
         # value from some earlier video
         vote = current_votes.get(tester.id)
         tester_rows.append({
+            "id": tester.id,
             "seat": tester.seat,
             "keyboard_id": tester.keyboard_id,
             "keyboard_name": tester.keyboard_name,
+            "name": tester.name,
             "age": tester.age,
             "glasses": tester.glasses,
             "gender": tester.gender,
@@ -497,30 +579,10 @@ def play(id_session):
     if video is None:
         return redirect(url_for('group.results', id_session=session.id))
 
-    folder_name = session.name.replace(" ", "_")
-    if video.reference:
-        folder = "ref_seq"
-    else:
-        folder = "test_seq"
-    folder_path = video_path(folder_name, folder)
-    if not os.path.exists(folder_path):
+    paths = _round_paths(session, video)
+    if paths is None:
         return redirect(url_for('views.problem'))
-    current_path = os.path.join(folder_path, video.name)
-    if not os.path.exists(current_path):
-        return redirect(url_for('views.problem'))
-
-    if session.test_method == "dcr":
-        reference = Video.query.filter_by(id_sequence=video.id_sequence,
-                                          reference=True).first()
-        grey = video_path("grey50.mp4")
-        if reference is None or not os.path.exists(grey):
-            return redirect(url_for('views.problem'))
-        reference_path = video_path(folder_name, "ref_seq", reference.name)
-        if not os.path.exists(reference_path):
-            return redirect(url_for('views.problem'))
-        play_videos(reference_path, grey, current_path)
-    else:
-        play_videos(current_path)
+    play_videos(*paths)
 
     run.round_started = time.time()
     _sync_last_seq(_testers(run), keyboards.state().get("seq", 0))
@@ -613,35 +675,43 @@ def export(id_session):
         return redirect(url_for('group.setup', id_session=session.id))
 
     testers = _testers(run)
-    sequences = Sequence.query.filter_by(id_session=session.id).all()
-    folder_path = os.path.join("csv")
+    videos = []
+    for sequence in Sequence.query.filter_by(id_session=session.id).all():
+        query = Video.query.filter_by(id_sequence=sequence.id)
+        if session.test_method == "dcr":
+            query = query.filter_by(reference=False)
+        videos.extend(query.all())
+    votes = {(vote.id_tester, vote.id_video): vote.value
+             for vote in GroupVote.query.filter_by(id_group_run=run.id).all()}
+    _, labels = _scale(session)
+    table = export_files.build_table(session, testers, videos, votes, labels)
+
+    folder_path = os.path.join(os.getcwd(), "csv")
     os.makedirs(folder_path, exist_ok=True)
-    open_folder(folder_path)
     session_name = session.name.replace(" ", "_")
-    csv_file_path = os.path.join(os.getcwd(), "csv", session_name + ".csv")
+    csv_file_path = os.path.join(folder_path, session_name + ".csv")
+    xlsx_file_path = os.path.join(folder_path, session_name + ".xlsx")
 
-    with open(csv_file_path, 'w', newline='') as csv_file:
-        csv_writer = csv.writer(csv_file)
-        csv_writer.writerow([session.name])
-        csv_writer.writerow([session.test_method, session.display])
-        csv_writer.writerow([])
-        csv_writer.writerow([""] + [f"Tester {tester.seat}" for tester in testers])
-        csv_writer.writerow([""] + [tester.age if tester.age is not None else "n/a"
-                                    for tester in testers])
-        csv_writer.writerow([""] + [_glasses_label(tester) for tester in testers])
+    try:
+        export_files.write_csv(table, csv_file_path)
+    except PermissionError:
+        flash(f'Cannot write {session_name}.csv — close it in Excel and export again.',
+              category='error')
+        return redirect(url_for('group.results', id_session=session.id))
 
-        for sequence in sequences:
-            if session.test_method == "dcr":
-                videos = Video.query.filter_by(id_sequence=sequence.id,
-                                               reference=False).all()
-            else:
-                videos = Video.query.filter_by(id_sequence=sequence.id).all()
-            for video in videos:
-                votes = {vote.id_tester: vote.value
-                         for vote in _votes_of_video(run, video)}
-                csv_writer.writerow([video.name]
-                                    + [votes.get(tester.id, "n/a")
-                                       for tester in testers])
+    try:
+        export_files.write_xlsx(table, xlsx_file_path)
+    except ImportError:
+        flash('CSV exported. For the Excel file run: pip install -r requirements.txt',
+              category='error')
+        open_folder("csv")
+        return redirect(url_for('group.results', id_session=session.id))
+    except PermissionError:
+        flash(f'CSV exported, but {session_name}.xlsx is open in Excel — close it '
+              'and export again.', category='error')
+        open_folder("csv")
+        return redirect(url_for('group.results', id_session=session.id))
 
-    flash('CSV exported into csv folder', category='success')
+    open_folder("csv")
+    flash('CSV and Excel exported into csv folder', category='success')
     return redirect(url_for('group.results', id_session=session.id))

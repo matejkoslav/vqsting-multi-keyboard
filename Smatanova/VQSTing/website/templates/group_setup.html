@@ -19,6 +19,7 @@
 
     <div class="d-flex flex-wrap align-items-center gap-2 mt-4">
         <button id="add" type="button" class="btn btn-outline-primary">Add tester</button>
+        <span id="free" class="small text-muted me-2"></span>
         <form method="POST" action="{{ url_for('group.training', id_session=session.id) }}">
             <button type="submit" class="btn btn-outline-secondary">Training</button>
         </form>
@@ -35,10 +36,14 @@
     <div class="alert alert-light border mt-4 mb-0 small">
         <strong>Pairing:</strong> click <em>Pair keyboard</em> in a column, then press any key on that
         tester's keyboard.<br>
-        <strong>Age and glasses:</strong> the tester types on their own keyboard and the number appears
-        in their <em>Age</em> box — <kbd>Backspace</kbd> deletes, <kbd>Enter</kbd> saves.
-        Then <kbd>1</kbd> = wears glasses, <kbd>2</kbd> = no glasses.<br>
-        Everything can also be typed and clicked with the mouse in the column.
+        <strong>Name, age and glasses:</strong> the tester fills them in this order on their own keyboard —
+        name (letters, <kbd>Space</kbd>) <kbd>Enter</kbd>, age <kbd>Enter</kbd>, then
+        <kbd>1</kbd> = wears glasses, <kbd>2</kbd> = no glasses. <kbd>Backspace</kbd> deletes.
+        Keys only go to the box that is highlighted, so the name and the age never mix.<br>
+        <strong>Operator:</strong> fix anything with ✎ and your own keyboard (accents too) —
+        <kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels. While you edit, the testers' keyboards are paused.
+        Glasses can also be clicked with the mouse.<br>
+        <strong>Remove</strong> deletes a tester; the others keep their data and are renumbered.
     </div>
 </div>
 
@@ -46,121 +51,279 @@
     const stateUrl = "{{ url_for('group.state', id_session=session.id) }}";
     const baseUrl = "{{ url_for('group.setup', id_session=session.id) }}";
     const maxTesters = {{ max_testers }};
+    const POLL_MS = 100;
+    const FIELDS = ['name', 'age'];
+    const MAX_LENGTH = {name: 100, age: 3};
 
+    // Everything kept in the browser is keyed by the tester's id (not the seat
+    // number), so removing a tester and renumbering the others loses nothing.
     let since = 0;
-    const typing = {};                  // seat -> digits typed on that keyboard (unsaved)
-    const glasses = {};                 // seat -> true/false picked but maybe unsaved
-    const lastKey = {};                 // seat -> {key, at} for de-duplication
-    const stage = {};                   // seat -> 'age' | 'glasses'
-    const savedTimer = {};              // seat -> timeout id for the saved badge
+    let latest = [];                    // testers from the last /state answer
+    const draft = {};                   // id -> {name, age}: typed on the tester's keyboard, unsaved
+    const stage = {};                   // id -> 'name' | 'age' | 'glasses' | 'done'
+    const lastKey = {};                 // id -> {key, at} for de-duplication
+    const savedTimer = {};              // id -> timeout id for the saved badge
+    let editing = null;                 // {id, field} while the operator edits a box
 
-    async function send(path, data) {
-        await fetch(baseUrl + path, {
+    async function post(path, data) {
+        return fetch(baseUrl + path, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data)
         });
+    }
+
+    async function send(path, data) {
+        await post(path, data);
         refresh();
     }
 
-    function currentAgeText(seat, tester) {
-        const typed = typing[seat];
-        if (typed !== undefined && typed !== null) return typed;
-        const known = (tester || {}).age;
+    function testerById(id) {
+        return latest.find(tester => tester.id === id) || null;
+    }
+
+    function draftOf(id) {
+        if (!draft[id]) draft[id] = {name: null, age: null};
+        return draft[id];
+    }
+
+    // What a box shows: the unsaved text if there is any, otherwise the saved value.
+    function fieldText(tester, field) {
+        const typed = draftOf(tester.id)[field];
+        if (typed !== null && typed !== undefined) return typed;
+        const known = tester[field];
         return known === null || known === undefined ? '' : String(known);
     }
 
-    function ageBox(seat) {
-        return document.getElementById(`age-${seat}`);
+    // The order is fixed: name -> age -> glasses -> done.
+    function stageOf(tester) {
+        if (stage[tester.id]) return stage[tester.id];
+        if (!tester.name) return 'name';
+        if (tester.age === null) return 'age';
+        if (tester.glasses === null) return 'glasses';
+        return 'done';
     }
 
-    function columnHtml(seat) {
+    function nextStage(tester, after) {
+        if (after === 'name' && tester.age === null) return 'age';
+        if ((after === 'name' || after === 'age') && tester.glasses === null) return 'glasses';
+        return 'done';
+    }
+
+    // The tester's keyboard sends only capital letters: write "JAN NOVAK" as "Jan Novak".
+    function appendLetter(text, letter) {
+        const startOfWord = text === '' || text.endsWith(' ');
+        return text + (startOfWord ? letter.toUpperCase() : letter.toLowerCase());
+    }
+
+    function el(id, field) {
+        return document.getElementById(`${field}-${id}`);
+    }
+
+    function fieldHtml(id, field, label, numeric) {
+        return `
+            <label class="form-label small mb-1 mt-2" for="${field}-${id}">${label}</label>
+            <div class="input-group">
+                <input type="text" ${numeric ? 'inputmode="numeric"' : ''} maxlength="${MAX_LENGTH[field]}"
+                       autocomplete="off" readonly class="form-control" id="${field}-${id}"
+                       data-field="${field}" placeholder="type on your keyboard">
+                <button type="button" class="btn btn-outline-secondary" data-edit="${field}"
+                        title="Operator: edit with your own keyboard">✎</button>
+            </div>`;
+    }
+
+    function columnHtml(id) {
         return `
         <div class="card-body">
-            <h5 class="card-title mb-1">Tester ${seat}</h5>
-            <div class="small text-muted" data-role="keyboard">not paired</div>
+            <div class="d-flex justify-content-between align-items-start">
+                <h5 class="card-title mb-0" data-role="seat"></h5>
+                <button type="button" class="btn btn-outline-danger btn-sm" data-role="remove"
+                        title="Remove this tester">✕ Remove</button>
+            </div>
+            <div class="small text-muted mt-1" data-role="keyboard">not paired</div>
             <div class="small mt-2">
-                Saved age: <b data-role="age">–</b> ·
-                Glasses: <b data-role="glasses">–</b>
+                Saved name: <b data-role="saved-name">–</b> ·
+                age: <b data-role="age">–</b> ·
+                glasses: <b data-role="glasses">–</b>
                 <span class="text-success fw-bold ms-1" data-role="saved"></span>
             </div>
             <div class="small text-primary d-none" data-role="wait">Press any key on this keyboard…</div>
             <button type="button" class="btn btn-outline-primary btn-sm mt-2" data-role="pair">Pair keyboard</button>
             <hr>
-            <label class="form-label small mb-1" for="age-${seat}">Age</label>
-            <input type="text" inputmode="numeric" maxlength="3" autocomplete="off"
-                   class="form-control" id="age-${seat}" placeholder="type on your keyboard">
-            <div class="small text-primary mt-1" data-role="stage"></div>
+            ${fieldHtml(id, 'name', 'Name and surname', false)}
+            ${fieldHtml(id, 'age', 'Age', true)}
             <label class="form-label small mb-1 mt-2">Glasses</label>
-            <div class="btn-group w-100" role="group">
+            <div class="btn-group w-100 rounded" role="group" data-role="glasses-group">
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-glasses="1">Yes</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-glasses="0">No</button>
             </div>
-            <button type="button" class="btn btn-secondary btn-sm mt-2 w-100" data-role="save">Save</button>
+            <div class="small text-primary mt-2" data-role="stage"></div>
         </div>`;
     }
 
-    function createColumn(seat) {
+    function createColumn(id) {
         const col = document.createElement('div');
         col.className = 'col-12';
-        col.id = `col-${seat}`;
-        col.dataset.seat = seat;
-        col.innerHTML = columnHtml(seat);
+        col.id = `col-${id}`;
+        col.dataset.id = id;
+        col.innerHTML = columnHtml(id);
 
-        col.querySelector('[data-role="pair"]').addEventListener('click', () => send('/pair', {seat: seat}));
-        col.querySelector('[data-role="save"]').addEventListener('click', () => save(seat, false));
+        // A clicked button keeps the focus, and Windows sends the testers' keys to the
+        // page too, so an Enter on any keyboard would click it again. Drop the focus.
+        col.querySelectorAll('button').forEach(button =>
+            button.addEventListener('click', () => button.blur()));
+
+        col.querySelector('[data-role="pair"]').addEventListener('click', () => {
+            const tester = testerById(id);
+            if (tester) send('/pair', {seat: tester.seat});
+        });
+        col.querySelector('[data-role="remove"]').addEventListener('click', () => removeTester(id));
         col.querySelectorAll('[data-glasses]').forEach(button => {
             button.addEventListener('click', () => {
-                glasses[seat] = button.dataset.glasses === '1';
-                save(seat, false);
+                const tester = testerById(id);
+                if (!tester) return;
+                if (stage[id] === 'glasses') delete stage[id];
+                save(tester, {glasses: button.dataset.glasses === '1'});
             });
         });
-        col.querySelector(`#age-${seat}`).addEventListener('keydown', event => {
-            if (event.key === 'Enter') save(seat, false);
+        col.querySelectorAll('[data-edit]').forEach(button => {
+            button.addEventListener('click', () => startEdit(id, button.dataset.edit));
         });
-
-        document.getElementById('columns').append(col);
+        col.querySelectorAll('[data-field]').forEach(input => {
+            input.addEventListener('keydown', event => {
+                if (input.readOnly) return;
+                if (event.key === 'Enter') { event.preventDefault(); finishEdit(true); }
+                if (event.key === 'Escape') { event.preventDefault(); finishEdit(false); }
+            });
+            input.addEventListener('blur', () => {
+                if (editing && editing.id === id && editing.field === input.dataset.field) {
+                    finishEdit(true);
+                }
+            });
+        });
         return col;
     }
 
-    async function save(seat, keepStage) {
-        const payload = {seat: seat};
-        const age = (ageBox(seat).value || '').trim();
-        if (age) payload.age = age;
-        if (seat in glasses) payload.glasses = glasses[seat];
-        if (!age && !(seat in glasses)) return;
+    // ---------- operator editing (own keyboard + mouse) ----------
 
-        await send('/tester', payload);
-        typing[seat] = null;
-        if (!keepStage) stage[seat] = null;
-        delete glasses[seat];
-        ageBox(seat).value = age;
-        flashSaved(seat);
+    function startEdit(id, field) {
+        if (editing) finishEdit(true);
+        const tester = testerById(id);
+        if (!tester) return;
+        editing = {id, field};
+        const input = el(id, field);
+        input.value = fieldText(tester, field);
+        input.readOnly = false;
+        input.classList.add('border-primary');
+        input.focus();
+        input.select();
+        render(latest, null);
     }
 
-    function flashSaved(seat) {
-        const column = document.getElementById(`col-${seat}`);
+    function finishEdit(keep) {
+        if (!editing) return;
+        const {id, field} = editing;
+        editing = null;
+        const input = el(id, field);
+        const tester = testerById(id);
+        if (!input || !tester) return;
+        input.readOnly = true;
+        input.blur();
+        const value = input.value.trim();
+        if (!keep) {
+            input.value = fieldText(tester, field);
+            render(latest, null);
+            return;
+        }
+        draftOf(id)[field] = value;
+        delete stage[id];               // continue with whatever is still missing
+        save(tester, {[field]: value});
+    }
+
+    // ---------- saving and removing ----------
+
+    async function save(tester, fields) {
+        const response = await post('/tester', Object.assign({seat: tester.seat}, fields));
+        if (response.ok) {
+            // show the saved value right away instead of waiting for the next poll
+            const saved = await response.json();
+            const known = testerById(tester.id);
+            if (known) {
+                known.name = saved.name;
+                known.age = saved.age;
+                known.glasses = saved.glasses;
+            }
+        }
+        for (const field of FIELDS) {
+            if (field in fields) draftOf(tester.id)[field] = null;
+        }
+        flashSaved(tester.id);
+        render(latest, null);
+        refresh();
+    }
+
+    async function removeTester(id) {
+        const tester = testerById(id);
+        if (!tester) return;
+        const who = tester.name ? `${tester.name} (Tester ${tester.seat})` : `Tester ${tester.seat}`;
+        if (!confirm(`Remove ${who}? The other testers keep their data.`)) return;
+        if (editing && editing.id === id) editing = null;
+        const response = await post('/remove', {seat: tester.seat});
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            alert(data.error || 'The tester could not be removed.');
+        } else {
+            delete draft[id]; delete stage[id]; delete lastKey[id];
+        }
+        refresh();
+    }
+
+    function flashSaved(id) {
+        const column = document.getElementById(`col-${id}`);
         if (!column) return;
         const badge = column.querySelector('[data-role="saved"]');
         badge.textContent = '✓ saved';
-        clearTimeout(savedTimer[seat]);
-        savedTimer[seat] = setTimeout(() => { badge.textContent = ''; }, 1500);
+        clearTimeout(savedTimer[id]);
+        savedTimer[id] = setTimeout(() => { badge.textContent = ''; }, 1500);
+    }
+
+    // ---------- drawing ----------
+
+    function hintFor(tester, current) {
+        if (editing) {
+            return editing.id === tester.id
+                ? 'operator is editing — Enter saves, Esc cancels'
+                : 'paused while the operator edits';
+        }
+        if (!tester.keyboard_id) return 'pair a keyboard, or fill in with ✎';
+        if (current === 'name') return 'type your name and surname, then press Enter';
+        if (current === 'age') return 'type your age, then press Enter';
+        if (current === 'glasses') return 'press 1 = wears glasses, 2 = no glasses';
+        return '✓ all saved — the operator can fix it with ✎';
     }
 
     function render(testers, pairingSeatNow) {
         const wrap = document.getElementById('columns');
-        const seats = new Set(testers.map(tester => tester.seat));
-        wrap.querySelectorAll('[data-seat]').forEach(column => {
-            if (!seats.has(Number(column.dataset.seat))) column.remove();
+        const ids = new Set(testers.map(tester => tester.id));
+        wrap.querySelectorAll('[data-id]').forEach(column => {
+            if (!ids.has(Number(column.dataset.id))) column.remove();
         });
 
         const width = 12 / Math.max(testers.length, 1);
-        for (const tester of testers) {
-            const column = document.getElementById(`col-${tester.seat}`) || createColumn(tester.seat);
+        testers.forEach((tester, index) => {
+            let column = document.getElementById(`col-${tester.id}`);
+            if (!column) column = createColumn(tester.id);
+            // keep the columns in seat order, but never move the box being edited
+            if (wrap.children[index] !== column && !(editing && editing.id === tester.id)) {
+                wrap.insertBefore(column, wrap.children[index] || null);
+            }
             column.className = `col-12 col-lg-${width}`;
 
+            const current = stageOf(tester);
+            column.querySelector('[data-role="seat"]').textContent = `Tester ${tester.seat}`;
             column.querySelector('[data-role="keyboard"]').textContent =
                 tester.keyboard_id ? tester.keyboard_name : 'not paired';
+            column.querySelector('[data-role="saved-name"]').textContent = tester.name || '–';
             column.querySelector('[data-role="age"]').textContent =
                 tester.age === null ? '–' : tester.age;
             column.querySelector('[data-role="glasses"]').textContent =
@@ -168,35 +331,82 @@
             column.querySelector('[data-role="wait"]').classList.toggle(
                 'd-none', pairingSeatNow !== tester.seat);
 
-            const input = column.querySelector(`#age-${tester.seat}`);
-            const typed = typing[tester.seat];
-            if (document.activeElement !== input) {
-                input.value = typed !== undefined && typed !== null
-                    ? typed
-                    : (tester.age === null ? '' : tester.age);
+            const typingHere = tester.keyboard_id && !editing;
+            for (const field of FIELDS) {
+                const input = el(tester.id, field);
+                const isEdited = editing && editing.id === tester.id && editing.field === field;
+                if (!isEdited) input.value = fieldText(tester, field);
+                input.classList.toggle('border-primary',
+                    isEdited || (typingHere && current === field));
+                input.classList.toggle('border-2',
+                    isEdited || (typingHere && current === field));
             }
+            const group = column.querySelector('[data-role="glasses-group"]');
+            group.classList.toggle('border', typingHere && current === 'glasses');
+            group.classList.toggle('border-primary', typingHere && current === 'glasses');
+            group.classList.toggle('border-2', typingHere && current === 'glasses');
 
-            let hint = '';
-            if (stage[tester.seat] === 'glasses') {
-                hint = 'press 1 = wears glasses, 2 = no glasses';
-            } else if (typed !== undefined && typed !== null) {
-                hint = 'press Enter to save the age';
-            }
-            column.querySelector('[data-role="stage"]').textContent = hint;
+            column.querySelector('[data-role="stage"]').textContent = hintFor(tester, current);
 
-            const chosen = tester.seat in glasses ? glasses[tester.seat] : tester.glasses;
             column.querySelectorAll('[data-glasses]').forEach(button => {
-                const isOn = chosen !== null && chosen !== undefined
-                    && (button.dataset.glasses === '1') === chosen;
+                const isOn = tester.glasses !== null
+                    && (button.dataset.glasses === '1') === tester.glasses;
                 button.classList.toggle('btn-dark', isOn);
                 button.classList.toggle('btn-outline-secondary', !isOn);
             });
+        });
+    }
+
+    // ---------- keys from the testers' own keyboards (listener) ----------
+
+    function handleKey(tester, key) {
+        const id = tester.id;
+        const current = stageOf(tester);
+        const typed = draftOf(id);
+
+        if (current === 'name') {
+            const text = fieldText(tester, 'name');
+            if (/^[A-Z]$/.test(key)) {
+                typed.name = appendLetter(text, key).slice(0, MAX_LENGTH.name);
+                stage[id] = 'name';
+            } else if (key === 'Space') {
+                if (text !== '' && !text.endsWith(' ')) typed.name = text + ' ';
+                stage[id] = 'name';
+            } else if (key === 'Backspace') {
+                typed.name = text.slice(0, -1);
+                stage[id] = 'name';
+            } else if (key === 'Enter' && text.trim() !== '') {
+                stage[id] = nextStage(tester, 'name');
+                save(tester, {name: text.trim()});
+            }
+        } else if (current === 'age') {
+            const text = fieldText(tester, 'age');
+            if (/^[0-9]$/.test(key)) {
+                typed.age = (text + key).slice(0, MAX_LENGTH.age);
+                stage[id] = 'age';
+            } else if (key === 'Backspace') {
+                typed.age = text.slice(0, -1);
+                stage[id] = 'age';
+            } else if (key === 'Enter' && text !== '') {
+                stage[id] = nextStage(tester, 'age');
+                save(tester, {age: text});
+            }
+        } else if (current === 'glasses') {
+            if (key === '1' || key === '2') {
+                stage[id] = 'done';
+                save(tester, {glasses: key === '1'});
+            }
         }
+        // 'done': everything is saved; further keys are ignored (fix with ✎)
     }
 
     function handleEvents(testers, events) {
         for (const event of events) {
             if (event.seq > since) since = event.seq;
+            // While the operator edits a box, the testers' keyboards are paused:
+            // a key typed on a paired keyboard must land only in that box.
+            if (editing) continue;
+            // Only keys from a paired keyboard count, and only for its own tester.
             const tester = testers.find(candidate => candidate.keyboard_id
                 && candidate.keyboard_id === event.device_id);
             if (!tester) continue;
@@ -204,52 +414,58 @@
 
             // One physical key can show up twice (keyboard + control node with
             // the same device id). Ignore a repeat of the same key within 40 ms.
-            const previous = lastKey[tester.seat];
+            const previous = lastKey[tester.id];
             if (previous && previous.key === event.key && event.at - previous.at < 0.04) continue;
-            lastKey[tester.seat] = {key: event.key, at: event.at};
+            lastKey[tester.id] = {key: event.key, at: event.at};
 
-            const seat = tester.seat;
-            const inGlasses = stage[seat] === 'glasses';
-
-            if (inGlasses && (event.key === '1' || event.key === '2')) {
-                glasses[seat] = event.key === '1';
-                stage[seat] = null;
-                save(seat);
-                continue;
-            }
-
-            if (/^[0-9]$/.test(event.key)) {
-                stage[seat] = 'age';
-                typing[seat] = (currentAgeText(seat, tester) + event.key).slice(0, 3);
-            } else if (event.key === 'Backspace') {
-                stage[seat] = 'age';
-                typing[seat] = currentAgeText(seat, tester).slice(0, -1);
-            } else if (event.key === 'Enter') {
-                stage[seat] = 'glasses';
-                save(seat, true);
-            }
+            handleKey(tester, event.key);
         }
     }
 
+    let busy = false;
     async function refresh() {
-        const response = await fetch(`${stateUrl}?since=${since}`);
-        if (!response.ok) return;
-        const data = await response.json();
+        if (busy) return;               // never stack requests when the PC is slow
+        busy = true;
+        try {
+            const response = await fetch(`${stateUrl}?since=${since}`);
+            if (!response.ok) return;
+            const data = await response.json();
+            latest = data.testers;
 
-        document.getElementById('listener-warning').classList.toggle('d-none', data.listener);
+            document.getElementById('listener-warning').classList.toggle('d-none', data.listener);
 
-        handleEvents(data.testers, data.events);
-        render(data.testers, data.pairing_seat);
+            handleEvents(data.testers, data.events);
+            render(data.testers, data.pairing_seat);
 
-        document.getElementById('start').disabled = data.testers.length === 0
-            || data.testers.some(tester => tester.age === null);
-        document.getElementById('add').disabled = data.testers.length >= maxTesters;
+            document.getElementById('start').disabled = data.testers.length === 0
+                || data.testers.some(tester => tester.age === null || !tester.name);
+            document.getElementById('add').disabled = data.testers.length >= maxTesters;
+            document.getElementById('free').textContent =
+                `${maxTesters - data.testers.length} of ${maxTesters} seats free`;
+        } catch (error) {
+            // server restarting: try again on the next tick
+        } finally {
+            busy = false;
+        }
     }
 
-    document.getElementById('add').addEventListener('click', () => send('/add', {}));
+    // Windows delivers every keyboard's keys to the focused element as well. Only
+    // the box the operator is editing may take them; everything else is ignored,
+    // so a tester can never type into another box or "press" a button.
+    document.addEventListener('keydown', event => {
+        if (event.ctrlKey || event.altKey || event.metaKey || /^F\d+$/.test(event.key)) return;
+        const target = event.target;
+        if (target && target.matches && target.matches('input[data-field]') && !target.readOnly) return;
+        event.preventDefault();
+    });
+
+    document.getElementById('add').addEventListener('click', event => {
+        event.currentTarget.blur();
+        send('/add', {});
+    });
 
     refresh();
-    setInterval(refresh, 500);
+    setInterval(refresh, POLL_MS);
 </script>
 
 {% endblock %}

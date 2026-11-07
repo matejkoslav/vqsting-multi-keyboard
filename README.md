@@ -10,6 +10,8 @@ o novú funkciu: **viac testerov na jednom PC, každý s vlastnou klávesnicou**
 > Linux číta `/dev/input`, Windows Raw Input, zvyšok appky je spoločný.
 >
 > Ako spustiť skupinový test: **[docs/for-humans/group-mode.md](docs/for-humans/group-mode.md)**.
+> Testéri zadávajú meno, vek a okuliare na svojej klávesnici; výsledky sa exportujú do Excelu aj CSV.
+> Čo sa zmenilo naposledy: **[docs/for-humans/progress.md](docs/for-humans/progress.md)**.
 
 ## 👉 Začni tu
 

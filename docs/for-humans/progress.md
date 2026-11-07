@@ -1,5 +1,30 @@
 # Progress — living list
 
+Aktualizované: 07.11.2026 · vetva `feature/tester-names-export` (Patrik) · `main` = pôvodná verzia
+
+## ✅ Hotové (07.11.2026): mená testérov, Remove, oprava písania, Excel export
+- [x] **meno a priezvisko testéra** — nový stĺpec `Tester.name`; píše sa na klávesnici testéra
+      (A–Z, `Space`, appka upraví na „Jan Novak“), diakritiku doplní operátor cez ✎;
+      zobrazuje sa na setup, hlasovacej aj results stránke a v exporte; *Start* ho vyžaduje
+- [x] DB sa doplní sama pri štarte (`ALTER TABLE tester ADD COLUMN name`) — staré `database.db` fungujú
+- [x] **✕ Remove** testéra (`POST /group/<id>/remove`): zmaže jeho hlasy, ostatných prečísluje 1..N,
+      voľné miesto sa dá znova obsadiť; počas bežiaceho testu zakázané (409);
+      ukazovateľ „X of 4 seats free“
+- [x] **oprava: písanie za viacerých testérov** — príčina: Windows posiela klávesy zo *všetkých*
+      klávesníc aj do políčka s fokusom (a Enter „klikal“ na naposledy kliknuté tlačidlo).
+      Políčka sú teraz zamknuté, natívne klávesy sa na setup aj hlasovacej stránke ignorujú
+- [x] **pevné poradie polí** meno → vek → okuliare; klávesy idú len do aktívneho poľa
+      (zvýraznené), po uložení všetkého sa ignorujú; počas úpravy cez ✎ sú klávesnice testérov pozastavené
+- [x] stav na stránke je viazaný na `id` testéra → Remove nezmaže rozpísaný text ostatným
+- [x] **plynulejšie písanie** — polling 100 ms (setup) / 200 ms (hlasovanie) bez prekrývania
+      požiadaviek; riadky `GET …/state` sa nevypisujú do terminálu
+- [x] **Start** pred prepnutím do `running` skontroluje všetky video súbory → chýbajúce video
+      už nezasekne beh v stave „running“
+- [x] **export**: `csv/<session>.xlsx` (farby appky, mená v hlavičke, farebné hodnotenia 5→1,
+      legenda) + čitateľnejší `csv/<session>.csv` (`;`, UTF-8 s BOM, info blok, mená);
+      upozornenie, keď je súbor otvorený v Exceli; nová závislosť `openpyxl`
+- [x] smoke test rozšírený (mená, Remove, start bez videa, CSV/XLSX), dokumentácia aktualizovaná
+
 Aktualizované: 28.10.2026 · `main` = `71bc32d` · group mode aj Windows listener zmergované
 
 ## ✅ Hotové (28.10.2026): group mode — N testérov na jednom PC

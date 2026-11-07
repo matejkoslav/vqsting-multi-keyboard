@@ -67,6 +67,7 @@ class Tester(db.Model):
     seat = db.Column(db.Integer, nullable=False)
     keyboard_id = db.Column(db.String(200))
     keyboard_name = db.Column(db.String(200))
+    name = db.Column(db.String(100))
     age = db.Column(db.Integer)
     glasses = db.Column(db.Boolean)
     gender = db.Column(db.String(1))
