@@ -1,15 +1,16 @@
 # Group mode — ako spustiť skupinový test
 
-> Vetva `feature/group-mode`. N = 1 až 4 testéri sedia pri jednom PC, pozerajú
+> N = 1 až 4 testéri sedia pri jednom PC, pozerajú
 > to isté video na jednom monitore a každý hlasuje na svojej klávesnici
 > (alebo myšou). Testéri nemajú účty ani heslá — identitou je fyzická
 > klávesnica, ktorú im priradíš pri párovaní.
 
 ## Čo na to treba
 
-- Linux s touto verziou appky (listener klávesníc je súčasťou balíka).
+- Linux alebo Windows s touto verziou appky (listener klávesníc je súčasťou
+  balíka: `./run.sh` na Linuxe, `run.bat` na Windows).
 - Appku spúšťaj cez `./run.sh` — spustí aj Flask, aj listener klávesníc.
-  Listener si vypýta `pkexec` dialóg (prístup k `/dev/input`), ten potvrď.
+  Listener si na Linuxe vypýta `pkexec` (prístup k `/dev/input`), ten potvrď.
 - Jedna obrazovka, jedna myš a 1–4 fyzické klávesnice.
 - Vytvorenú session s videami (`Create new test session`, videá v
   `video/<nazov_session>/…`).
@@ -58,8 +59,8 @@
    seba a školou 5→1 (rovnaké texty ako v klasickom teste).
    - každý testér stlačí `1`–`5` na svojej klávesnici — jeho stĺpec sa označí
      `✓ hlasoval`;
-   - myšou: klikni na hlavičku stĺpca (modrý rám = stĺpec je „arm“), potom
-     klikni na číslo v tom stĺpci;
+   - myšou: klikni priamo na číslo v stĺpci toho testéra — hlas sa zapíše
+     okamžite, žiadne označovanie stĺpca netreba;
    - hlas sa dá zmeniť do zatvorenia kola;
    - kolo sa zavrie po **9 sekundách** alebo hneď, keď hlasovali všetci.
 10. Po poslednom videu sa zobrazí **Results** — tabuľka video × testér

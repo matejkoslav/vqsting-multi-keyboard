@@ -1,6 +1,6 @@
 # Progress — living list
 
-Aktualizované: 07.11.2026 · vetva `feature/tester-names-export` (Patrik) · `main` = pôvodná verzia
+Aktualizované: 07.11.2026 · group mode, Windows listener, mená testérov, Remove a Excel export zmergované do `main`
 
 ## ✅ Hotové (07.11.2026): mená testérov, Remove, oprava písania, Excel export
 - [x] **meno a priezvisko testéra** — nový stĺpec `Tester.name`; píše sa na klávesnici testéra
@@ -18,14 +18,14 @@ Aktualizované: 07.11.2026 · vetva `feature/tester-names-export` (Patrik) · `m
 - [x] stav na stránke je viazaný na `id` testéra → Remove nezmaže rozpísaný text ostatným
 - [x] **plynulejšie písanie** — polling 100 ms (setup) / 200 ms (hlasovanie) bez prekrývania
       požiadaviek; riadky `GET …/state` sa nevypisujú do terminálu
-- [x] **Start** pred prepnutím do `running` skontroluje všetky video súbory → chýbajúce video
-      už nezasekne beh v stave „running“
+- [x] **Start** pred prepnutím do `running` skontroluje všetky video súbory a pri 1-sekvenciovej session sa nezacyklí (`MAX_ORDER_SHUFFLES`) → chýbajúce video ani jedna sekvencia
+      už nezaseknú beh v stave „running“
 - [x] **export**: `csv/<session>.xlsx` (farby appky, mená v hlavičke, farebné hodnotenia 5→1,
       legenda) + čitateľnejší `csv/<session>.csv` (`;`, UTF-8 s BOM, info blok, mená);
       upozornenie, keď je súbor otvorený v Exceli; nová závislosť `openpyxl`
-- [x] smoke test rozšírený (mená, Remove, start bez videa, CSV/XLSX), dokumentácia aktualizovaná
+- [x] smoke test rozšírený (mená, Remove, start bez videa, 1-sekvenciový beh, CSV/XLSX), dokumentácia aktualizovaná
 
-Aktualizované: 28.10.2026 · `main` = `71bc32d` · group mode aj Windows listener zmergované
+Aktualizované: 5.11.2026 · group mode aj Windows listener zmergované
 
 ## ✅ Hotové (28.10.2026): group mode — N testérov na jednom PC
 - [x] účastnícke účty zrušené: testér = stĺpec v behu testu, nie `User`

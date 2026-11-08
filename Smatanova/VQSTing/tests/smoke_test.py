@@ -24,7 +24,8 @@ sys.path.insert(0, BASE_DIR)
 
 import website
 from website import create_app, keyboards
-from website.models import GroupRun, GroupVote, Sequence, Tester, Training, Video
+from website.models import (GroupRun, GroupVote, Sequence, Session, Tester,
+                            Training, Video)
 from website.platform_compat import (
     IS_WINDOWS,
     find_mpv,
@@ -639,6 +640,31 @@ def group_checks():
               [t["vote"] for t in state["testers"]] == [5, None]
               and state["park"]["round_open"] is False,
               str(state["testers"]))
+
+        # one sequence means every video has the same number, so the
+        # "no three in a row" shuffle can never succeed; the run must still start
+        from website.group import generate_order
+        with app.app_context():
+            single = Session(name="SingleSequence", test_method="acr",
+                             password="x", id_user=1, ok=True)
+            website.db.session.add(single)
+            website.db.session.commit()
+            only_sequence = Sequence(id_session=single.id)
+            website.db.session.add(only_sequence)
+            website.db.session.commit()
+            for index in range(6):
+                website.db.session.add(Video(id_sequence=only_sequence.id,
+                                             name=f"v{index}.mp4",
+                                             reference=index == 0))
+            website.db.session.commit()
+            order = generate_order(single)
+            check("group: a single-sequence session still gets an order",
+                  len(order) == 6 and len(set(order)) == 6, str(order))
+            Video.query.filter_by(id_sequence=only_sequence.id).delete()
+            Sequence.query.filter_by(id_session=single.id).delete()
+            website.db.session.delete(single)
+            website.db.session.commit()
+
         client.post("/group/1/reset")
     finally:
         os.chdir(original_cwd)
