@@ -27,26 +27,27 @@
         .vote-cols { flex: 1; display: grid; gap: 16px; grid-auto-flow: column;
                      grid-auto-columns: minmax(0, 1fr); min-height: 0; }
 
-        .vote-col { display: flex; flex-direction: column; min-height: 0;
-                    background: #fff; border: 1px solid #d8dde3; border-radius: 14px; overflow: hidden; }
+        .vote-col { display: flex; flex-direction: column; align-items: center; justify-content: center;
+                    gap: 18px; padding: 24px 16px; text-align: center; min-height: 0;
+                    background: #fff; border: 2px solid #d8dde3; border-radius: 14px;
+                    transition: background-color .25s, border-color .25s; }
+        .vote-col h2 { font-size: 1.8rem; font-weight: 700; margin: 0; color: #1D3364; }
+        .vote-col .seat { font-size: 0.85rem; color: #6b7785; }
+        .vote-col .dots { font-size: 4rem; line-height: 1; color: #c3cad3; }
+        .vote-col .status { font-size: 1.15rem; font-weight: 600; color: #6b7785; }
 
-        .who { padding: 12px 14px; border-bottom: 1px solid #eef1f4; text-align: center; }
-        .who h2 { font-size: 1.5rem; font-weight: 700; margin: 0; }
-        .who .kb, .who .demo { font-size: 0.8rem; color: #6b7785; }
-        .who .status { font-weight: 700; font-size: 0.95rem; }
-        .who .status.voted { color: #1f8a4c; }
-        .who .status.waiting { color: #6b7785; }
+        /* after rating: only the border turns green, no fill */
+        .vote-col.voted { border-color: #1f8a4c; }
+        .vote-col.voted .status { color: #1f8a4c; }
+        .vote-col.voted .dots { visibility: hidden; }
 
-        .opts { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 10px; min-height: 0; }
+        /* the scale, small and shared by everybody */
+        .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 22px;
+                  margin: 0 0 14px; padding: 10px 14px; background: #fff; border: 1px solid #d8dde3;
+                  border-radius: 12px; color: #1c2530; font-size: 1.05rem; }
+        .legend b { color: #1D3364; }
+        .vote-foot { color: #6b7785; font-size: 0.85rem; margin: 6px 0 0; text-align: center; }
 
-        .vote-btn { flex: 1; display: flex; align-items: center; gap: 14px; width: 100%;
-                    padding: 0 16px; background: #fff; text-align: left;
-                    border: 1px solid #d8dde3; border-radius: 10px; color: #1c2530;
-                    font: inherit; font-size: 1rem; cursor: pointer; }
-        .vote-btn .n { font-size: 2rem; font-weight: 700; min-width: 34px; font-variant-numeric: tabular-nums; }
-        .vote-btn.picked { background: #1c2530; border-color: #1c2530; color: #fff; }
-
-        .vote-foot { color: #6b7785; font-size: 0.85rem; margin: 12px 0 0; }
     </style>
 </head>
 <body>
@@ -54,100 +55,65 @@
     <div class="vote-head">
         <h1>Video <span id="current">{{ current }}</span> / <span id="total">{{ total }}</span></h1>
         <span class="sub">{{ session.name }} · {{ session.test_method|upper }}</span>
-        <span class="clock" id="clock">closes in <b id="countdown">9.0</b> s</span>
+        <span class="clock" id="clock">closes in <b id="countdown">9</b> s</span>
+    </div>
+
+    <div class="legend">
+        {% for label in labels %}<span><b>{{ 5 - loop.index0 }}</b> {{ label }}</span>{% endfor %}
     </div>
 
     <div id="columns" class="vote-cols"></div>
 
     <p class="vote-foot">
-        Vote with keys <kbd>1</kbd>–<kbd>5</kbd> on your own keyboard,
-        or click a number in your column.
+        Rate with keys <kbd>1</kbd>–<kbd>5</kbd> on your own keyboard. Only your first key counts.
     </p>
 </div>
 
 <form id="nextForm" method="POST" action="{{ url_for('group.next_video', id_session=session.id) }}" class="d-none"></form>
 
 <script>
+    // Blind rating: this page never receives the values, only whether a tester
+    // has already rated the current video. Voting is by keyboard only (no mouse),
+    // so nobody can see what the others picked.
     const stateUrl = "{{ url_for('group.state', id_session=session.id) }}";
-    const voteUrl = "{{ url_for('group.vote', id_session=session.id) }}";
     const nextForm = document.getElementById('nextForm');
 
     let since = 0;
     let finished = false;
 
-    function ensureColumn(tester, labels) {
-        let column = document.getElementById(`vote-${tester.seat}`);
+    function ensureColumn(tester) {
+        let column = document.getElementById(`vote-${tester.id}`);
         if (column) return column;
-
         column = document.createElement('div');
         column.className = 'vote-col';
-        column.id = `vote-${tester.seat}`;
-        column.dataset.seat = tester.seat;
-
-        const options = labels.map((label, index) => {
-            const value = 5 - index;
-            return `<button type="button" class="vote-btn" data-value="${value}">
-                        <span class="n">${value}</span><span>${label}</span>
-                    </button>`;
-        }).join('');
-
+        column.id = `vote-${tester.id}`;
+        column.dataset.id = tester.id;
         column.innerHTML = `
-            <div class="who">
+            <div>
                 <h2 data-role="name"></h2>
-                <div class="kb" data-role="keyboard"></div>
-                <div class="demo" data-role="demo"></div>
-                <div class="status waiting" data-role="status">… waiting</div>
+                <div class="seat" data-role="seat"></div>
             </div>
-            <div class="opts">${options}</div>`;
-
-        column.querySelectorAll('[data-value]').forEach(button => {
-            button.addEventListener('click', () => {
-                button.blur();
-                vote(tester.seat, Number(button.dataset.value));
-            });
-        });
-
+            <div class="dots">…</div>
+            <div class="status" data-role="status"></div>`;
         document.getElementById('columns').append(column);
         return column;
     }
 
-    async function vote(seat, value) {
-        await fetch(voteUrl, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({seat: seat, value: value})
-        });
-        refresh();
-    }
-
     function render(data) {
-        const labels = data.scale.labels;
-        const seats = new Set(data.testers.map(tester => tester.seat));
-        document.querySelectorAll('#columns [data-seat]').forEach(column => {
-            if (!seats.has(Number(column.dataset.seat))) {
-                column.remove();
-            }
+        const ids = new Set(data.testers.map(tester => tester.id));
+        document.querySelectorAll('#columns [data-id]').forEach(column => {
+            if (!ids.has(Number(column.dataset.id))) column.remove();
         });
 
         for (const tester of data.testers) {
-            const column = ensureColumn(tester, labels);
-            column.querySelector('[data-role="name"]').textContent = tester.name || `Tester ${tester.seat}`;
-            column.querySelector('[data-role="keyboard"]').textContent =
-                (tester.name ? `Tester ${tester.seat} · ` : '') + (tester.keyboard_name || 'no keyboard');
-
-            const demographic = [];
-            if (tester.age !== null) demographic.push(`${tester.age} years`);
-            if (tester.glasses !== null) demographic.push(tester.glasses ? 'glasses' : 'no glasses');
-            column.querySelector('[data-role="demo"]').textContent = demographic.join(' · ');
-
-            const status = column.querySelector('[data-role="status"]');
-            status.textContent = tester.vote !== null ? '✓ voted' : '… waiting';
-            status.className = 'status ' + (tester.vote !== null ? 'voted' : 'waiting');
-
-            column.querySelectorAll('[data-value]').forEach(button => {
-                button.classList.toggle('picked',
-                    tester.vote !== null && Number(button.dataset.value) === tester.vote);
-            });
+            const column = ensureColumn(tester);
+            const name = tester.name || `Tester ${tester.seat}`;
+            column.querySelector('[data-role="name"]').textContent = name;
+            column.querySelector('[data-role="seat"]').textContent = tester.name ? `Tester ${tester.seat}` : '';
+            column.classList.toggle('voted', tester.voted);
+            column.querySelector('[data-role="status"]').textContent = tester.voted
+                ? `${name} has rated this sequence`
+                : 'waiting for rating…';
         }
     }
 
@@ -191,8 +157,8 @@
         }
     }
 
-    // Windows also delivers the testers' keys to the page itself. Without this an
-    // Enter or Space from any keyboard would "click" the last clicked vote button.
+    // Windows also delivers the testers' keys to the page itself; ignore them here
+    // (the votes come from the keyboard listener).
     document.addEventListener('keydown', event => {
         if (event.ctrlKey || event.altKey || event.metaKey || /^F\d+$/.test(event.key)) return;
         event.preventDefault();

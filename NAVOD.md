@@ -68,7 +68,13 @@ Toto v repe nie je → skopíruj od Mateja na tie isté cesty.
 3. **Skupinový test:** v tom istom riadku klikni **Group test**.
    Pridaj 1–4 testérov (**Add tester**) a spáruj klávesnice (**Pair keyboard** → testér stlačí
    ľubovoľnú klávesu). Každý testér potom na svojej klávesnici vyplní v pevnom poradí
-   **meno → `Enter` → vek → `Enter` → okuliare `1`/`2`**. Potom **Start**.
+   **meno → `Enter` → vek → `Enter` → okuliare `1`/`2`**. Potom **Start**
+   (každý testér musí mať spárovanú klávesnicu).
+   - **Hlasovanie je slepé:** testéri hodnotia klávesami `1`–`5` (platí prvé stlačenie,
+     myšou nie). Na obrazovke je len časovač, legenda stupnice a pri testérovi, ktorý
+     hodnotil, zelený rámik s „*meno* has rated this sequence“ — hodnoty vidí až admin.
+   - **Session sa dá spustiť opakovane** s novými testérmi (*Run 2, 3, …*); starší testéri
+     ostanú vo výsledkoch a exporte. *Reset* maže len aktuálny beh, *Delete all results* všetko.
    - **✎** pri políčku: operátor opraví meno alebo vek na svojej klávesnici (aj s diakritikou).
    - **✕ Remove**: odstráni testéra, ostatní sa prečíslujú a nič nestratia.
 4. Po teste na stránke výsledkov **Export CSV + Excel** → v priečinku `csv/` vznikne

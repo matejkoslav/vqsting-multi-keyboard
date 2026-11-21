@@ -85,12 +85,28 @@ def device_label(device_name):
     return device_name
 
 
+WRITE_TRIES = 10          # pokusy o os.replace, kým Flask súbor práve číta
+WRITE_RETRY_SECONDS = 0.003
+
+
 def write_state(path, payload):
-    """Celý súbor naraz: Flask nikdy nečíta rozrobený JSON."""
+    """Celý súbor naraz: Flask nikdy nečíta rozrobený JSON.
+
+    Na Windowse os.replace zlyhá (PermissionError), keď Flask cieľový súbor
+    práve číta. Preto pár krátkych pokusov; ak ani tie nevyjdú, vráti False
+    a slučka správ zápis zopakuje o chvíľu (inak by stlačenie "viselo",
+    kým niekto nestlačí ďalšiu klávesu).
+    """
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(payload, f)
-    os.replace(tmp, path)
+    for attempt in range(WRITE_TRIES):
+        try:
+            os.replace(tmp, path)
+            return True
+        except PermissionError:
+            time.sleep(WRITE_RETRY_SECONDS)
+    return False
 
 
 class ListenerState:
@@ -184,6 +200,7 @@ def run():
 
     path = state_file()
     state = ListenerState()
+    pending = {"write": False}      # posledný zápis sa nepodaril -> zopakovať
 
     def raw_device_name(hdevice):
         size = wintypes.UINT(0)
@@ -220,7 +237,7 @@ def run():
         # node = inštančná cesta; na Linuxe je v tomto poli "eventN"
         event = state.press(device_id(name), device_label(name), instance,
                             key_name(key.VKey))
-        write_state(path, state.payload())
+        pending["write"] = not write_state(path, state.payload())
         print(f"[{event['device_id']}] {event['key']}  ({name})", flush=True)
 
     def wndproc(hwnd, msg, wparam, lparam):
@@ -265,6 +282,9 @@ def run():
             while not stop["requested"]:
                 if u.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
                     u.DispatchMessageW(ctypes.byref(msg))
+                elif pending["write"]:
+                    # stlačenie sa nezapísalo (Flask čítal súbor) -> skús znova hneď
+                    pending["write"] = not write_state(path, state.payload())
                 else:
                     time.sleep(POLL_SECONDS)
         finally:
@@ -334,7 +354,7 @@ def selftest():
 
     path = os.path.join(tempfile.mkdtemp(prefix="vqsting-selftest-"), "keyboards.json")
     try:
-        write_state(path, payload)
+        assert write_state(path, payload) is True
         assert not os.path.exists(path + ".tmp")
         with open(path, encoding="utf-8") as f:
             assert json.load(f) == payload

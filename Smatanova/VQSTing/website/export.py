@@ -35,18 +35,26 @@ def _label(tester):
     return tester.name or f"Tester {tester.seat}"
 
 
-def build_table(session, testers, videos, votes, scale_labels, exported=None):
+def _date(value, with_time=True):
+    if value is None:
+        return NA
+    return value.strftime("%d.%m.%Y %H:%M" if with_time else "%d.%m.%Y")
+
+
+def build_table(session, testers, videos, votes, scale_labels, created=None):
     """Return everything both files need as plain Python values.
 
+    ``testers`` may come from several runs of the session (``tester.batch``),
     ``videos`` is the list of Video rows in export order and ``votes`` maps
     ``(id_tester, id_video) -> value``.
     """
-    exported = exported or datetime.now()
     return {
         "session": session.name,
         "method": (session.test_method or "").upper(),
         "display": session.display or "",
-        "exported": exported.strftime("%d.%m.%Y %H:%M"),
+        "created": _date(created, with_time=False),
+        "runs": [getattr(tester, "batch", None) or 1 for tester in testers],
+        "run_dates": [_date(getattr(tester, "started", None)) for tester in testers],
         "seats": [f"Tester {tester.seat}" for tester in testers],
         "names": [_label(tester) for tester in testers],
         "ages": [tester.age if tester.age is not None else NA for tester in testers],
@@ -68,10 +76,12 @@ def write_csv(table, path):
         writer.writerow(["Session", table["session"]])
         writer.writerow(["Method", table["method"]])
         writer.writerow(["Display", table["display"]])
-        writer.writerow(["Exported", table["exported"]])
+        writer.writerow(["Created", table["created"]])
         writer.writerow([])
-        writer.writerow(["Tester"] + table["seats"])
         writer.writerow(["Name"] + table["names"])
+        writer.writerow(["Run"] + table["runs"])
+        writer.writerow(["Run date"] + table["run_dates"])
+        writer.writerow(["Tester"] + table["seats"])
         writer.writerow(["Age"] + table["ages"])
         writer.writerow(["Glasses"] + table["glasses"])
         writer.writerow([])
@@ -113,7 +123,7 @@ def write_xlsx(table, path):
 
     # --- info block ---
     info = [("Method", table["method"]), ("Display", table["display"]),
-            ("Exported", table["exported"]), ("Testers", count)]
+            ("Created", table["created"]), ("Testers", count)]
     row = 3
     for label, value in info:
         key = sheet.cell(row=row, column=1, value=label)
@@ -140,7 +150,8 @@ def write_xlsx(table, path):
     header.alignment = left
     row += 1
 
-    for label, values in (("Seat", table["seats"]), ("Age", table["ages"]),
+    for label, values in (("Run", table["runs"]), ("Run date", table["run_dates"]),
+                          ("Seat", table["seats"]), ("Age", table["ages"]),
                           ("Glasses", table["glasses"])):
         key = sheet.cell(row=row, column=1, value=label)
         key.font = Font(bold=True, color=NAVY)
@@ -200,10 +211,10 @@ def write_xlsx(table, path):
 
     # --- sizes, freeze, print ---
     longest = max([len(str(video)) for video, _ in table["rows"]]
-                  + [len("Exported"), 12])
+                  + [len("Run date"), 12])
     sheet.column_dimensions["A"].width = min(longest + 3, 60)
     for col, name in enumerate(table["names"], start=2):
-        width = max(len(str(name)), len(table["display"]) if col == 2 else 0, 10)
+        width = max(len(str(name)), len(table["display"]) if col == 2 else 0, 17)
         sheet.column_dimensions[get_column_letter(col)].width = min(width + 3, 40)
     if count == 0:
         sheet.column_dimensions["B"].width = max(len(table["display"]) + 3, 20)

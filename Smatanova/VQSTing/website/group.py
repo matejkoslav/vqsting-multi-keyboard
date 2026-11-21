@@ -4,6 +4,7 @@ The tester's physical keyboard is their identity; the listener state is read
 only through ``website.keyboards.state()`` and never from the JSON file.
 """
 
+from datetime import datetime
 import os
 import random
 import time
@@ -52,17 +53,45 @@ def _run_for(session):
 
 
 def _testers(run):
-    return Tester.query.filter_by(id_group_run=run.id).order_by(Tester.seat).all()
+    """Testers of the current run (batch) only — the ones on the setup page."""
+    return (Tester.query.filter_by(id_group_run=run.id, batch=run.batch)
+            .order_by(Tester.seat).all())
 
 
 def _tester(run, seat):
-    return Tester.query.filter_by(id_group_run=run.id, seat=seat).first()
+    return Tester.query.filter_by(id_group_run=run.id, batch=run.batch, seat=seat).first()
+
+
+def _result_testers(run):
+    """Testers shown in results and export: every finished earlier run, plus the
+    current run once it is finished too."""
+    testers = (Tester.query.filter_by(id_group_run=run.id)
+               .order_by(Tester.batch, Tester.seat).all())
+    return [tester for tester in testers
+            if tester.batch < run.batch or run.phase == "finished"]
+
+
+def _new_batch(run):
+    """Start the next run of the session: earlier testers stay in the results,
+    the setup page starts with free seats."""
+    run.batch = (run.batch or 1) + 1
+    run.phase = "setup"
+    run.order = ""
+    run.current_id = 0
+    run.round_started = None
+    run.pairing_seat = None
+
+
+def _delete_testers(testers):
+    for tester in testers:
+        GroupVote.query.filter_by(id_tester=tester.id).delete()
+        db.session.delete(tester)
 
 
 def _ensure_tester(run, seat):
     tester = _tester(run, seat)
     if tester is None:
-        tester = Tester(id_group_run=run.id, seat=seat, last_seq=0)
+        tester = Tester(id_group_run=run.id, seat=seat, last_seq=0, batch=run.batch)
         db.session.add(tester)
         db.session.commit()
     return tester
@@ -137,13 +166,14 @@ def _votes_of_video(run, video):
 
 
 def _store_vote(run, tester, video, value):
+    """Store the tester's vote for this video. Only the first key counts: the
+    testers do not see what they pressed, so a later key must not change it."""
     vote = GroupVote.query.filter_by(id_tester=tester.id, id_video=video.id).first()
-    if vote is None:
-        vote = GroupVote(id_group_run=run.id, id_tester=tester.id,
-                         id_video=video.id, value=value)
-        db.session.add(vote)
-    else:
-        vote.value = value
+    if vote is not None:
+        return False
+    db.session.add(GroupVote(id_group_run=run.id, id_tester=tester.id,
+                             id_video=video.id, value=value))
+    return True
 
 
 def round_is_open(run, testers=None):
@@ -203,6 +233,7 @@ def process_events(run, listener):
                 value = VOTE_KEYS.get(event.get("key"))
                 if value is not None:
                     _store_vote(run, tester, video, value)
+                    db.session.flush()      # a second key in the same batch sees the first vote
                 changed = True
 
     if changed:
@@ -299,6 +330,10 @@ def setup(id_session):
     if session is None:
         return redirect(url_for('views.forbidden'))
     run = _run_for(session)
+    if run.phase == "finished":
+        # the session is run again: free seats for new testers, keep the old ones
+        _new_batch(run)
+        db.session.commit()
     return render_template("group_setup.html", user=current_user, session=session,
                            run=run, max_testers=MAX_TESTERS)
 
@@ -422,6 +457,12 @@ def start(id_session):
     if missing:
         flash('Tester ' + ', '.join(missing) + ' has no age.', category='error')
         return redirect(url_for('group.setup', id_session=session.id))
+    missing = [str(tester.seat) for tester in testers if not tester.keyboard_id]
+    if missing:
+        # votes are given only on the tester's own keyboard (no mouse, so nobody
+        # sees what the others pick), so every tester needs a paired keyboard
+        flash('Tester ' + ', '.join(missing) + ' has no paired keyboard.', category='error')
+        return redirect(url_for('group.setup', id_session=session.id))
 
     order = generate_order(session)
     if not order:
@@ -437,8 +478,11 @@ def start(id_session):
                   category='error')
             return redirect(url_for('group.setup', id_session=session.id))
 
-    # a second run must not inherit the votes of the previous one
-    GroupVote.query.filter_by(id_group_run=run.id).delete()
+    # starting again must not keep the votes of this run's previous attempt;
+    # the votes of earlier runs (other testers) stay
+    for tester in testers:
+        GroupVote.query.filter_by(id_tester=tester.id).delete()
+        tester.started = datetime.now()
     run.order = ", ".join(str(video_id) for video_id in order)
     run.current_id = 0
     run.phase = "running"
@@ -496,9 +540,31 @@ def reset(id_session):
         return redirect(url_for('views.forbidden'))
     run = GroupRun.query.filter_by(id_session=session.id).first()
     if run is not None:
-        db.session.delete(run)
+        # only the current run: earlier runs (and their testers) stay in results
+        _delete_testers(_testers(run))
+        run.phase = "setup"
+        run.order = ""
+        run.current_id = 0
+        run.round_started = None
+        run.pairing_seat = None
         db.session.commit()
-    flash('Group run reset', category='success')
+    flash('Current run reset — earlier runs are kept', category='success')
+    return redirect(url_for('group.setup', id_session=session.id))
+
+
+@group.route('/<int:id_session>/delete-all', methods=['POST'])
+@login_required
+@role_required(10)
+def delete_all(id_session):
+    """Delete every run of the session with all testers and votes."""
+    session = _owned_session(id_session)
+    if session is None:
+        return redirect(url_for('views.forbidden'))
+    run = GroupRun.query.filter_by(id_session=session.id).first()
+    if run is not None:
+        db.session.delete(run)          # cascades to testers and votes
+        db.session.commit()
+    flash('All results of this session were deleted', category='success')
     return redirect(url_for('group.setup', id_session=session.id))
 
 
@@ -519,10 +585,9 @@ def state(id_session):
     order = _order_ids(run)
     video = _current_video(run) if run.phase == "running" else None
     open_round = round_is_open(run, testers)
-    current_votes = {}
+    voted_now = set()
     if video is not None:
-        current_votes = {vote.id_tester: vote.value
-                         for vote in _votes_of_video(run, video)}
+        voted_now = {vote.id_tester for vote in _votes_of_video(run, video)}
     since = request.args.get("since", 0, type=int) or 0
 
     seconds_left = 0.0
@@ -531,9 +596,6 @@ def state(id_session):
 
     tester_rows = []
     for tester in testers:
-        # only this round counts: a tester who missed it shows nothing, not the
-        # value from some earlier video
-        vote = current_votes.get(tester.id)
         tester_rows.append({
             "id": tester.id,
             "seat": tester.seat,
@@ -543,7 +605,10 @@ def state(id_session):
             "age": tester.age,
             "glasses": tester.glasses,
             "gender": tester.gender,
-            "vote": vote,
+            # Blind rating: the page only learns *whether* the tester has voted in
+            # this round, never the value, so nobody can be influenced by it.
+            # (Only this round counts; a missed round shows False.)
+            "voted": tester.id in voted_now,
             "last_seq": tester.last_seq,
         })
 
@@ -596,29 +661,7 @@ def play(id_session):
 
     return render_template("group_vote.html", user=current_user, session=session,
                            run=run, total=len(_order_ids(run)),
-                           current=run.current_id + 1)
-
-
-@group.route('/<int:id_session>/vote', methods=['POST'])
-@login_required
-@role_required(10)
-def vote(id_session):
-    session = _owned_session(id_session)
-    if session is None:
-        return jsonify({"error": "forbidden"}), 403
-    run = _run_for(session)
-    data = _payload()
-    seat = _parse_int(data.get("seat"))
-    value = _parse_int(data.get("value"))
-    if seat is None or value not in (1, 2, 3, 4, 5):
-        return jsonify({"error": "seat and value 1..5 are required"}), 400
-    tester = _tester(run, seat)
-    video = _current_video(run)
-    if tester is None or video is None or not round_is_open(run):
-        return jsonify({"error": "round is not open"}), 409
-    _store_vote(run, tester, video, value)
-    db.session.commit()
-    return jsonify({"ok": True, "seat": seat, "value": value})
+                           current=run.current_id + 1, labels=_scale(session)[1])
 
 
 @group.route('/<int:id_session>/next', methods=['POST'])
@@ -644,6 +687,23 @@ def next_video(id_session):
 
 # ---------- results and CSV ----------------------------------------------
 
+def _session_videos(session):
+    """The rated videos of a session in a fixed order (the same for every run)."""
+    videos = []
+    for sequence in Sequence.query.filter_by(id_session=session.id).order_by(Sequence.id).all():
+        query = Video.query.filter_by(id_sequence=sequence.id)
+        if session.test_method == "dcr":
+            query = query.filter_by(reference=False)
+        videos.extend(query.order_by(Video.id).all())
+    return videos
+
+
+def _session_created(session, run):
+    """When the session was created. Sessions made before this was stored fall
+    back to the date of their first group run."""
+    return session.created or (run.created if run is not None else None)
+
+
 @group.route('/<int:id_session>/results')
 @login_required
 @role_required(10)
@@ -655,18 +715,16 @@ def results(id_session):
     if run is None:
         return redirect(url_for('group.setup', id_session=session.id))
 
-    testers = _testers(run)
-    rows = []
-    for video_id in _order_ids(run):
-        video = Video.query.filter_by(id=video_id).first()
-        if video is None:
-            continue
-        votes = {vote.id_tester: vote.value for vote in _votes_of_video(run, video)}
-        rows.append({"video": video.name,
-                     "votes": [votes.get(tester.id) for tester in testers]})
+    testers = _result_testers(run)
+    votes = {(vote.id_tester, vote.id_video): vote.value
+             for vote in GroupVote.query.filter_by(id_group_run=run.id).all()}
+    rows = [{"video": video.name,
+             "votes": [votes.get((tester.id, video.id)) for tester in testers]}
+            for video in _session_videos(session)]
 
     return render_template("group_results.html", user=current_user, session=session,
-                           run=run, testers=testers, rows=rows)
+                           run=run, testers=testers, rows=rows,
+                           created=_session_created(session, run))
 
 
 @group.route('/<int:id_session>/export')
@@ -680,17 +738,13 @@ def export(id_session):
     if run is None:
         return redirect(url_for('group.setup', id_session=session.id))
 
-    testers = _testers(run)
-    videos = []
-    for sequence in Sequence.query.filter_by(id_session=session.id).all():
-        query = Video.query.filter_by(id_sequence=sequence.id)
-        if session.test_method == "dcr":
-            query = query.filter_by(reference=False)
-        videos.extend(query.all())
+    testers = _result_testers(run)
+    videos = _session_videos(session)
     votes = {(vote.id_tester, vote.id_video): vote.value
              for vote in GroupVote.query.filter_by(id_group_run=run.id).all()}
     _, labels = _scale(session)
-    table = export_files.build_table(session, testers, videos, votes, labels)
+    table = export_files.build_table(session, testers, videos, votes, labels,
+                                     created=_session_created(session, run))
 
     folder_path = os.path.join(os.getcwd(), "csv")
     os.makedirs(folder_path, exist_ok=True)

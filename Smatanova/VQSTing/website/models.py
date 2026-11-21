@@ -20,6 +20,7 @@ class Session(db.Model):
     password = db.Column(db.String(200), nullable=False)
     id_user = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     ok = db.Column(db.Boolean)
+    created = db.Column(db.DateTime(timezone=True), default=func.now())
     sequences = db.relationship('Sequence', backref='session', lazy=True)
     trainings = db.relationship('Training', backref='session', lazy=True)
 
@@ -54,6 +55,9 @@ class GroupRun(db.Model):
     phase = db.Column(db.String(10), nullable=False, default="setup")
     round_started = db.Column(db.Float)
     pairing_seat = db.Column(db.Integer)
+    # A session can be run many times with new testers. Each run gets the next
+    # batch number; the testers of earlier batches stay in results and export.
+    batch = db.Column(db.Integer, nullable=False, default=1)
     created = db.Column(db.DateTime(timezone=True), default=func.now())
     testers = db.relationship('Tester', backref='group_run', lazy=True,
                               cascade='all, delete-orphan')
@@ -71,6 +75,8 @@ class Tester(db.Model):
     age = db.Column(db.Integer)
     glasses = db.Column(db.Boolean)
     gender = db.Column(db.String(1))
+    batch = db.Column(db.Integer, nullable=False, default=1)   # which run of the session
+    started = db.Column(db.DateTime)                           # when that run was started
     last_seq = db.Column(db.Integer, nullable=False, default=0)
 
 

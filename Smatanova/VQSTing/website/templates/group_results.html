@@ -7,15 +7,12 @@
     <h1 class="text-center mt-4">{{ session.name }}</h1>
     <p class="text-center">
         <span class="badge bg-secondary">Method: {{ session.test_method|upper }}</span>
-        <span class="badge bg-secondary">{{ run.phase }}</span>
-        {% if session.display %}
-        <span class="badge bg-secondary">Display: {{ session.display }}</span>
-        {% endif %}
+        {% if created %}<span class="badge bg-secondary">Created: {{ created.strftime('%d.%m.%Y') }}</span>{% endif %}
     </p>
 
     {% if not testers %}
     <div class="alert alert-warning">
-        This group run has no testers yet.
+        No finished run yet.
         <a href="{{ url_for('group.setup', id_session=session.id) }}">Go to setup</a>.
     </div>
     {% else %}
@@ -28,6 +25,18 @@
                     {{ tester.name or ('Tester ' ~ tester.seat) }}
                     {% if tester.name %}<div class="small text-muted fw-normal">Tester {{ tester.seat }}</div>{% endif %}
                 </th>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td class="text-muted">Run</td>
+                {% for tester in testers %}
+                <td class="text-center">{{ tester.batch }}</td>
+                {% endfor %}
+            </tr>
+            <tr>
+                <td class="text-muted">Run date</td>
+                {% for tester in testers %}
+                <td class="text-center small">{{ tester.started.strftime('%d.%m.%Y %H:%M') if tester.started else 'n/a' }}</td>
                 {% endfor %}
             </tr>
             <tr>
@@ -68,10 +77,11 @@
 
     <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
         <a class="btn btn-primary" href="{{ url_for('group.export', id_session=session.id) }}">Export CSV + Excel</a>
-        <form method="POST" action="{{ url_for('group.reset', id_session=session.id) }}"
-              onsubmit="return confirm('Reset the group run and delete all votes?');">
-            <button type="submit" class="btn btn-outline-danger">Reset</button>
+        <form method="POST" action="{{ url_for('group.delete_all', id_session=session.id) }}"
+              onsubmit="return confirm('Really delete ALL testers and ALL results of this session (every run)? This cannot be undone.');">
+            <button type="submit" class="btn btn-danger">Delete all results</button>
         </form>
+        <a class="btn btn-success" href="{{ url_for('group.setup', id_session=session.id) }}">New run</a>
         <a class="btn btn-link" href="{{ url_for('views.my_table_sessions') }}">Back to my sessions</a>
     </div>
 </div>
