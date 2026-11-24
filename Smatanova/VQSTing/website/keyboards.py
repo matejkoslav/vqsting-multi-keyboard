@@ -47,6 +47,21 @@ def _listener_alive():
         return False
 
 
+def _read_state():
+    """Read keyboards.json. On Windows the listener may be replacing the file at
+    this very moment (open/replace collide), so try a few times before giving up;
+    an empty answer would make keys look lost or late."""
+    for attempt in range(5):
+        try:
+            with open(STATE) as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return {}
+        except (OSError, ValueError):
+            time.sleep(0.002)
+    return {}
+
+
 def state():
     system = platform.system()
     if system not in SUPPORTED:
@@ -60,11 +75,7 @@ def state():
             "age": None,
         }
 
-    try:
-        with open(STATE) as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        data = {}
+    data = _read_state()
 
     alive = _listener_alive()
     return {

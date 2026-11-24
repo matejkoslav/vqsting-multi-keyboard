@@ -369,7 +369,7 @@ def group_checks():
               and set(state["scale"]) == {"method", "labels"}
               and set(state["testers"][0]) == {"id", "seat", "keyboard_id", "keyboard_name",
                                                "name", "age", "glasses", "gender",
-                                               "vote", "last_seq"}
+                                               "voted", "last_seq"}
               and state["scale"]["labels"] == ["IMPERCEPTIBLE",
                                                "PERCEPTIBLE BUT NOT ANNOYING",
                                                "SLIGHTLY ANNOYING", "ANNOYING",
@@ -397,6 +397,18 @@ def group_checks():
                   state["phase"] == "running" and state["park"]["total"] == 12,
                   str(state["park"]))
 
+            def current_votes():
+                """Votes of the current round, read from the DB (the page never gets them)."""
+                with app.app_context():
+                    run = GroupRun.query.filter_by(id_session=1).first()
+                    video_id = int(run.order.split(",")[run.current_id])
+                    testers = (Tester.query.filter_by(id_group_run=run.id)
+                               .order_by(Tester.seat).all())
+                    values = {vote.id_tester: vote.value for vote in
+                              GroupVote.query.filter_by(id_group_run=run.id,
+                                                        id_video=video_id)}
+                    return [values.get(tester.id) for tester in testers]
+
             for round_number in (1, 2, 3):
                 response = client.get("/group/1/play")
                 check(f"group: round {round_number} voting page is 200",
@@ -412,23 +424,31 @@ def group_checks():
                     listener.press("linux:kbd2", "2")
                     state = client.get("/group/1/state?since=0").get_json()
                     check("group: keyboard votes reach both testers",
-                          [t["vote"] for t in state["testers"]] == [4, 2],
+                          current_votes() == [4, 2]
+                          and [t["voted"] for t in state["testers"]] == [True, True],
+                          str(current_votes()))
+                    check("group: rating is blind (the page never gets the values)",
+                          all("vote" not in t and set(t) == set(state["testers"][0])
+                              for t in state["testers"]),
                           str(state["testers"]))
                 elif round_number == 2:
                     listener.press("linux:kbd1", "3")
-                    response = client.post("/group/1/vote", json={"seat": 2, "value": 5})
-                    check("group: mouse vote is accepted", response.status_code == 200,
-                          response.get_data(as_text=True))
+                    client.get("/group/1/state?since=0")
+                    listener.press("linux:kbd1", "5")       # second key: ignored
+                    listener.press("linux:kbd2", "5")
                     state = client.get("/group/1/state?since=0").get_json()
-                    check("group: keyboard and mouse votes mix",
-                          [t["vote"] for t in state["testers"]] == [3, 5],
-                          str(state["testers"]))
+                    check("group: only the first key of a tester counts",
+                          current_votes() == [3, 5], str(current_votes()))
+                    response = client.post("/group/1/vote", json={"seat": 2, "value": 1})
+                    check("group: there is no mouse voting any more",
+                          response.status_code in (404, 405) and current_votes() == [3, 5],
+                          str(response.status_code))
                 else:
-                    client.post("/group/1/vote", json={"seat": 1, "value": 5})
-                    client.post("/group/1/vote", json={"seat": 2, "value": 1})
+                    listener.press("linux:kbd1", "5")
+                    listener.press("linux:kbd2", "1")
                     state = client.get("/group/1/state?since=0").get_json()
-                    check("group: mouse votes close the round",
-                          [t["vote"] for t in state["testers"]] == [5, 1]
+                    check("group: the round closes when everybody has rated",
+                          current_votes() == [5, 1]
                           and state["park"]["round_open"] is False,
                           str(state))
 
@@ -483,14 +503,17 @@ def group_checks():
             check("group: csv has an info block",
                   rows[0] == ["Session", "ExampleTest"] and rows[1] == ["Method", "DCR"]
                   and rows[2] == ["Display", "Samsung U24E590D UHD"]
-                  and rows[3][0] == "Exported" and rows[4] == [], str(rows[:5]))
+                  and rows[3][0] == "Created" and rows[3][1] != "n/a"
+                  and rows[4] == [], str(rows[:5]))
             check("group: csv has testers as columns with their names",
-                  rows[5] == ["Tester", "Tester 1", "Tester 2"]
-                  and rows[6] == ["Name", "Ján Nový", "Eva Malá"]
-                  and rows[7] == ["Age", "23", "31"]
-                  and rows[8] == ["Glasses", "ano", "nie"]
-                  and rows[10] == ["Video", "Ján Nový", "Eva Malá"], str(rows[5:11]))
-            data_rows = rows[11:]
+                  rows[5] == ["Name", "Ján Nový", "Eva Malá"]
+                  and rows[6] == ["Run", "1", "1"]
+                  and rows[7][0] == "Run date" and "n/a" not in rows[7]
+                  and rows[8] == ["Tester", "Tester 1", "Tester 2"]
+                  and rows[9] == ["Age", "23", "31"]
+                  and rows[10] == ["Glasses", "ano", "nie"]
+                  and rows[12] == ["Video", "Ján Nový", "Eva Malá"], str(rows[5:13]))
+            data_rows = rows[13:]
             numeric = [cell for row in data_rows for cell in row[1:] if cell != "n/a"]
             check("group: csv has one row per tested video", len(data_rows) == 12,
                   str(len(data_rows)))
@@ -587,7 +610,16 @@ def group_checks():
         client.post("/group/1/add", json={})
         client.post("/group/1/tester", json={"seat": 1, "name": "Jan", "age": 23})
         client.post("/group/1/tester", json={"seat": 2, "name": "Eva", "age": 31})
-        for seat, keyboard in ((1, "linux:kbd1"), (2, "linux:kbd2")):
+        client.post("/group/1/pair", json={"seat": 1})
+        listener.press("linux:kbd1", "Enter")
+        client.get("/group/1/state")
+        with patch("website.group.play_videos"):
+            response = client.post("/group/1/start")
+        state = client.get("/group/1/state").get_json()
+        check("group: start needs a paired keyboard for every tester",
+              response.status_code == 302 and state["phase"] == "setup",
+              state["phase"])
+        for seat, keyboard in ((2, "linux:kbd2"),):
             client.post("/group/1/pair", json={"seat": seat})
             listener.press(keyboard, "Enter")
             client.get("/group/1/state")
@@ -617,7 +649,16 @@ def group_checks():
         client.post("/group/1/add", json={})
         client.post("/group/1/tester", json={"seat": 1, "name": "Jan", "age": 23})
         client.post("/group/1/tester", json={"seat": 2, "name": "Eva", "age": 31})
-        for seat, keyboard in ((1, "linux:kbd1"), (2, "linux:kbd2")):
+        client.post("/group/1/pair", json={"seat": 1})
+        listener.press("linux:kbd1", "Enter")
+        client.get("/group/1/state")
+        with patch("website.group.play_videos"):
+            response = client.post("/group/1/start")
+        state = client.get("/group/1/state").get_json()
+        check("group: start needs a paired keyboard for every tester",
+              response.status_code == 302 and state["phase"] == "setup",
+              state["phase"])
+        for seat, keyboard in ((2, "linux:kbd2"),):
             client.post("/group/1/pair", json={"seat": seat})
             listener.press(keyboard, "Enter")
             client.get("/group/1/state")
@@ -630,16 +671,23 @@ def group_checks():
         with patch("website.group.play_videos"):
             client.post("/group/1/next")
             client.get("/group/1/play")
-        client.post("/group/1/vote", json={"seat": 1, "value": 5})
+        listener.press("linux:kbd1", "5")
+        client.get("/group/1/state")
         with app.app_context():
             run = GroupRun.query.filter_by(id_session=1).first()
             run.round_started = time.time() - 30    # let the round time out
             website.db.session.commit()
+            video_id = int(run.order.split(",")[run.current_id])
+            testers = Tester.query.filter_by(id_group_run=run.id).order_by(Tester.seat).all()
+            values = {vote.id_tester: vote.value for vote in
+                      GroupVote.query.filter_by(id_group_run=run.id, id_video=video_id)}
+            missed = [values.get(tester.id) for tester in testers]
         state = client.get("/group/1/state").get_json()
         check("group: a missed round does not reuse the previous vote",
-              [t["vote"] for t in state["testers"]] == [5, None]
+              missed == [5, None]
+              and [t["voted"] for t in state["testers"]] == [True, False]
               and state["park"]["round_open"] is False,
-              str(state["testers"]))
+              str(missed))
 
         # one sequence means every video has the same number, so the
         # "no three in a row" shuffle can never succeed; the run must still start
@@ -665,7 +713,66 @@ def group_checks():
             website.db.session.delete(single)
             website.db.session.commit()
 
+        # ---- the same session can be run again with new testers ----
+        def finish_run(names, keys):
+            for seat, name in enumerate(names, start=1):
+                client.post("/group/1/add", json={})
+                client.post("/group/1/tester",
+                            json={"seat": seat, "name": name, "age": 20 + seat})
+                client.post("/group/1/pair", json={"seat": seat})
+                listener.press(f"linux:kbd{seat}", "Enter")
+                client.get("/group/1/state")
+            with patch("website.group.play_videos"):
+                client.post("/group/1/start")
+                client.get("/group/1/play")
+            for seat, key in enumerate(keys, start=1):
+                listener.press(f"linux:kbd{seat}", key)
+            client.get("/group/1/state")
+            with app.app_context():
+                run = GroupRun.query.filter_by(id_session=1).first()
+                run.current_id = len(run.order.split(",")) - 1
+                website.db.session.commit()
+            client.post("/group/1/next")
+
+        response = client.post("/group/1/delete-all")
+        with app.app_context():
+            gone = GroupRun.query.filter_by(id_session=1).first() is None
+        check("group: delete all removes every run", response.status_code == 302 and gone)
+
+        finish_run(["Ann"], ["4"])
+        response = client.get("/group/1")
+        state = client.get("/group/1/state").get_json()
+        check("group: opening a finished session starts a new run with free seats",
+              response.status_code == 200 and state["testers"] == []
+              and state["phase"] == "setup", str(state["testers"]))
+        check("group: the setup page shows the new run number",
+              "Run 2" in response.get_data(as_text=True))
+        check("group: the earlier run stays in results",
+              "Ann" in client.get("/group/1/results").get_data(as_text=True))
+
+        finish_run(["Bob", "Cid"], ["2", "5"])
+        page = client.get("/group/1/results").get_data(as_text=True)
+        check("group: results show the testers of every run",
+              all(name in page for name in ("Ann", "Bob", "Cid")))
+        with patch("website.group.open_folder"):
+            client.get("/group/1/export")
+        with open(csv_path, newline="", encoding="utf-8-sig") as handle:
+            rows = list(csv.reader(handle, delimiter=";"))
+        votes = sorted(cell for row in rows[13:] for cell in row[1:] if cell != "n/a")
+        check("group: export adds the new testers to the earlier ones",
+              rows[5] == ["Name", "Ann", "Bob", "Cid"] and rows[6] == ["Run", "1", "2", "2"]
+              and votes == ["2", "4", "5"], str(rows[5:9]) + str(votes))
+
         client.post("/group/1/reset")
+        page = client.get("/group/1/results").get_data(as_text=True)
+        check("group: reset deletes only the current run",
+              "Ann" in page and "Bob" not in page and "Cid" not in page)
+
+        client.post("/group/1/delete-all")
+        with app.app_context():
+            left = (GroupRun.query.filter_by(id_session=1).count(),
+                    Tester.query.count(), GroupVote.query.count())
+        check("group: delete all removes all testers and votes", left == (0, 0, 0), str(left))
     finally:
         os.chdir(original_cwd)
         keyboards.STATE, keyboards.PID = original_paths

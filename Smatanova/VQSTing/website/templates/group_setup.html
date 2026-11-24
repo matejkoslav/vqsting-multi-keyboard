@@ -7,12 +7,12 @@
     <h1 class="text-center mt-4">{{ session.name }}</h1>
     <p class="text-center">
         <span class="badge bg-secondary">Method: {{ session.test_method|upper }}</span>
-        <span class="badge bg-secondary">{{ run.phase }}</span>
+        <span class="badge bg-primary">Run {{ run.batch }}</span>
     </p>
 
     <div id="listener-warning" class="alert alert-danger d-none">
-        Keyboard listener is not running. Pairing and voting by keyboard will not work —
-        use the mouse inputs in each column.
+        Keyboard listener is not running. Pairing and voting will not work — start the app with
+        <code>run.bat</code> (Windows) or <code>./run.sh</code> (Linux). Testers vote only on their own keyboard.
     </div>
 
     <div id="columns" class="row g-3"></div>
@@ -27,7 +27,7 @@
             <button id="start" type="submit" class="btn btn-success">Start</button>
         </form>
         <form method="POST" action="{{ url_for('group.reset', id_session=session.id) }}"
-              onsubmit="return confirm('Reset the group run and delete all votes?');">
+              onsubmit="return confirm('Reset the current run? Its testers and their votes will be deleted. Earlier runs are kept.');">
             <button type="submit" class="btn btn-outline-danger">Reset</button>
         </form>
         <a class="btn btn-link" href="{{ url_for('views.my_table_sessions') }}">Back to my sessions</a>
@@ -43,7 +43,9 @@
         <strong>Operator:</strong> fix anything with ✎ and your own keyboard (accents too) —
         <kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels. While you edit, the testers' keyboards are paused.
         Glasses can also be clicked with the mouse.<br>
-        <strong>Remove</strong> deletes a tester; the others keep their data and are renumbered.
+        <strong>Remove</strong> deletes a tester; the others keep their data and are renumbered.<br>
+        <strong>Rating is blind:</strong> every tester needs a paired keyboard and rates with <kbd>1</kbd>–<kbd>5</kbd>
+        on it (no mouse). Only the first key counts; the screen shows only <em>who</em> has rated, never the value.
     </div>
 </div>
 
@@ -438,7 +440,7 @@
             render(data.testers, data.pairing_seat);
 
             document.getElementById('start').disabled = data.testers.length === 0
-                || data.testers.some(tester => tester.age === null || !tester.name);
+                || data.testers.some(tester => tester.age === null || !tester.name || !tester.keyboard_id);
             document.getElementById('add').disabled = data.testers.length >= maxTesters;
             document.getElementById('free').textContent =
                 `${maxTesters - data.testers.length} of ${maxTesters} seats free`;

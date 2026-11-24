@@ -1,5 +1,39 @@
 # Progress — living list
 
+Aktualizované: 21.11.2026 · vetva `feature/blind-rating` (Patrik)
+
+## ✅ Hotové (21.11.2026): opakované behy session
+- [x] session sa dá spustiť viackrát: po dokončenom behu otvorí *Group test* nový beh
+      (`GroupRun.batch`, `Tester.batch`) s voľnými miestami; starší testéri ostávajú
+- [x] Results a export zobrazujú testérov zo všetkých dokončených behov vedľa seba,
+      s riadkami **Run** a **Run date** (`Tester.started`); hore dátum vytvorenia session
+      (`Session.created`, pri starých sessions dátum prvého behu)
+- [x] *Reset* maže len aktuálny beh; nové **Delete all results** (s potvrdením) zmaže všetko
+- [x] DB sa doplní sama (`_upgrade_schema`: `tester.batch/started`, `group_run.batch`,
+      `session.created`)
+- [x] hlasovacia obrazovka: veľká stupnica pred kolom odstránená, legenda presunutá hore;
+      po hodnotení len zelený rámik + text (bez výplne a fajky)
+- [x] smoke test: dva behy, Reset len aktuálneho behu, Delete all, nový tvar CSV
+- [x] **oprava oneskorených / „stratených“ kláves na Windowse:** listener prepisuje
+      `keyboards.json` cez `os.replace`, ktorý na Windowse zlyhá, keď appka súbor práve
+      číta → stlačenie sa zapísalo až pri ďalšej klávese. Teraz `write_state()` skúša
+      znova (10× po 3 ms) a slučka správ dopíše neuložený stav hneď, ako to ide;
+      Flask pri čítaní tiež skúsi znova (5×)
+- [x] jednoduchšie UI: setup bez stavu a *Delete all*; Results len metóda + dátum
+      vytvorenia, bez *Reset last run*; žltý štvorec (Bootstrap `.mark`) preč
+
+## ✅ Hotové (21.11.2026): slepé hodnotenie
+- [x] hlasovacia obrazovka nezobrazuje hodnoty ani to, kto čo stlačil — len časovač,
+      a pri testérovi, ktorý hodnotil, zelený stĺpec „*meno* has rated this sequence“
+- [x] `GET /state` posiela namiesto hodnoty len `voted: true/false` → hodnota sa nedostane
+      ani do prehliadača
+- [x] hlasovanie myšou zrušené (route `POST /group/<id>/vote` odstránená) — len klávesy 1–5
+      na vlastnej klávesnici; *Start* preto vyžaduje spárovanú klávesnicu pre každého testéra
+- [x] platí **prvé stlačenie** v kole, ďalšie sa ignorujú
+- [x] legenda stupnice na hlasovacej obrazovke
+- [x] výsledky a export ostávajú pre admina po teste
+- [x] smoke test: slepý `/state`, prvý hlas platí, bez myši, Start bez klávesnice
+
 Aktualizované: 07.11.2026 · group mode, Windows listener, mená testérov, Remove a Excel export zmergované do `main`
 
 ## ✅ Hotové (07.11.2026): mená testérov, Remove, oprava písania, Excel export

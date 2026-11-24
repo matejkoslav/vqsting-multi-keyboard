@@ -317,3 +317,27 @@ Tento dokument opisuje pôvodný návrh. Oproti nemu platí:
 - `werkzeug` log filtruje riadky s `/state`.
 - Export: `website/export.py` — `build_table()` → `write_csv()` (`;`, `utf-8-sig`,
   info blok, mená) a `write_xlsx()` (openpyxl, farby appky, legenda). Oba v `csv/`.
+
+## 11. Zmeny 21.11.2026 (`feature/blind-rating`)
+
+- Slepé hodnotenie: `GET /state` má pri testérovi `"voted": bool` namiesto `"vote"`;
+  hodnoty z DB ide len do results a exportu.
+- `POST /group/<id>/vote` (hlas myšou) **odstránené**. Hlasuje sa len cez listener.
+- `_store_vote()` uloží len prvý hlas testéra pre video (vracia `False`, ak už existuje).
+- `POST /start` vyžaduje `keyboard_id` u všetkých testérov.
+- `group_vote.html`: bez tlačidiel; stĺpec `.voted` má len zelený rámik a text
+  „<meno> has rated this sequence“; legenda stupnice hore; `play()` posiela do šablóny `labels`.
+
+## 12. Viac behov jednej session (21.11.2026)
+
+- `GroupRun` je stále jeden na session (`id_session` unique), ale má `batch` (číslo behu).
+  `Tester.batch` hovorí, do ktorého behu testér patrí, `Tester.started` kedy beh začal.
+- `_testers(run)` = len aktuálny beh (`batch == run.batch`) — setup, state, hlasovanie, Remove.
+  `_result_testers(run)` = staršie behy + aktuálny, ak je `finished` — results a export.
+- `GET /group/<id>` pri `phase == finished` zavolá `_new_batch()` → `batch += 1`, `phase=setup`.
+- `POST /reset` zmaže len testérov aktuálneho behu a ich hlasy.
+  `POST /group/<id>/delete-all` zmaže celý `GroupRun` (kaskáda na testérov a hlasy).
+- `POST /start` maže len hlasy testérov aktuálneho behu a nastaví im `started`.
+- Results/export idú cez `_session_videos()` (pevné poradie session, nie poradie behu).
+- Export: info blok má `Created` (`Session.created`, fallback `GroupRun.created`) namiesto
+  `Exported`; tester blok: `Name, Run, Run date, Tester, Age, Glasses`.

@@ -28,16 +28,31 @@ class _QuietPolling(logging.Filter):
         return '/state' not in message
 
 
+# Columns added after the first release: table -> [(column, SQL type)].
+# create_all() only creates missing tables, so old databases get them here.
+_NEW_COLUMNS = {
+    'tester': [('name', 'VARCHAR(100)'),
+               ('batch', 'INTEGER NOT NULL DEFAULT 1'),
+               ('started', 'DATETIME')],
+    'group_run': [('batch', 'INTEGER NOT NULL DEFAULT 1')],
+    'session': [('created', 'DATETIME')],
+}
+
+
 def _upgrade_schema():
     """Add columns that create_all() cannot add to an existing database."""
     from sqlalchemy import inspect, text
     inspector = inspect(db.engine)
-    if 'tester' not in inspector.get_table_names():
-        return
-    columns = {column['name'] for column in inspector.get_columns('tester')}
-    if 'name' not in columns:
-        with db.engine.begin() as connection:
-            connection.execute(text('ALTER TABLE tester ADD COLUMN name VARCHAR(100)'))
+    tables = set(inspector.get_table_names())
+    for table, new_columns in _NEW_COLUMNS.items():
+        if table not in tables:
+            continue
+        existing = {column['name'] for column in inspector.get_columns(table)}
+        for column, sql_type in new_columns:
+            if column not in existing:
+                with db.engine.begin() as connection:
+                    connection.execute(text(
+                        f'ALTER TABLE "{table}" ADD COLUMN {column} {sql_type}'))
 
 
 def create_app():
